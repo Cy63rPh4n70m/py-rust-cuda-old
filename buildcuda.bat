@@ -1,5 +1,5 @@
 cls
-cd cuda_lib
+cd cuda_src
 nvcc -use_fast_math -Xptxas -O3 -dc -c external.cu
 nvcc -use_fast_math -Xptxas -O3 -dc -c dense_funcs.cu
 nvcc -use_fast_math -Xptxas -O3 -dc -c array_ops.cu
