@@ -1,7 +1,7 @@
 # build rust shared library
 cargo build --release
 cd target/release
-move *.dll ../../nnpackage/rust_backend/
-move *.exp ../../nnpackage/rust_backend/
-move *.lib ../../nnpackage/rust_backend/
+move *.dll ../../nnpackage/backend/
+move *.exp ../../nnpackage/backend/
+move *.lib ../../nnpackage/backend/
 cd ../..
