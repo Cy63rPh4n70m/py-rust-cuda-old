@@ -22,10 +22,8 @@ pub struct TraversePtrs
 #[derive(Serialize, Deserialize)]
 pub struct NeuralNet
 {
-    pub all_cpu_layers: Vec<Layer>,
     pub all_cuda_layers: HashMap<String, CudaLayer>, // name -> layer
     pub apply_dropout: bool,
-    pub use_cuda: bool,
 
     // name, cpu_pinned, gpu
     pub input_ptrs: HashMap<String, (String, String, u32)>,
@@ -66,10 +64,8 @@ impl NeuralNet
         
         return Self
         {
-            all_cpu_layers: Vec::new(),
             all_cuda_layers: HashMap::new(),
             apply_dropout: true,
-            use_cuda,
 
             input_ptrs: HashMap::new(),
             input_grad_ptrs: HashMap::new(),
@@ -104,11 +100,6 @@ impl NeuralNet
     //{
     //    self.conv_input_shape = shape;
     //}
-
-    pub fn add_layer(&mut self, layer: Layer)
-    {
-        self.all_cpu_layers.push(layer);
-    }
 
     pub fn add_cuda_layer(&mut self, name: String, layer: CudaLayer)
     {
@@ -377,19 +368,15 @@ impl NeuralNet
 
     pub fn backward(&mut self)
     {
-        if self.use_cuda // perform looping on cuda layers using pointers
+        // backpropagate through layers, reverse of the layer path
+        for layer_name in self.backward_path.iter().rev()
         {
-            // backpropagate through layers, reverse of the layer path
-            for layer_name in self.backward_path.iter().rev()
-            {
-                let layer: &mut CudaLayer = self.all_cuda_layers.get_mut(layer_name).unwrap();
-                //println!("started {:?}", layer_name);
-                layer.backward(self.apply_dropout);
-                //println!("completed {:?}", layer_name);
-            }
-
-            //increment_counter(&self.backward_pass_count);
+            let layer: &mut CudaLayer = self.all_cuda_layers.get_mut(layer_name).unwrap();
+            //println!("started {:?}", layer_name);
+            layer.backward(self.apply_dropout);
+            //println!("completed {:?}", layer_name);
         }
+            //increment_counter(&self.backward_pass_count);
     }
 
     //pub fn obtain_flattened_output(&self) -> usize
@@ -427,27 +414,15 @@ impl NeuralNet
     pub fn details(&self)
     {
         let mut count: usize = 0;
-        if self.use_cuda
+        for (i, layer_name) in self.backward_path.iter().enumerate()
         {
-            for (i, layer_name) in self.backward_path.iter().enumerate()
-            {
-                let layer: &CudaLayer = self.all_cuda_layers.get(layer_name).unwrap();
-                println!("LAYER_ID: {:?} | LAYER_N: {}", layer_name, i);
-                layer.details();
-                println!("TOTAL_LAYER_PARAM_COUNT: {:?}", layer.get_param_count());
-                println!("\x1b[48;5;8m==================================\x1b[0m");
+            let layer: &CudaLayer = self.all_cuda_layers.get(layer_name).unwrap();
+            println!("LAYER_ID: {:?} | LAYER_N: {}", layer_name, i);
+            layer.details();
+            println!("TOTAL_LAYER_PARAM_COUNT: {:?}", layer.get_param_count());
+            println!("\x1b[48;5;8m==================================\x1b[0m");
 
-                count += layer.get_param_count();
-            }
-        }
-        else
-        {
-            for (i, layer) in self.all_cpu_layers.iter().enumerate()
-            {
-                println!("LAYER: {}", i);
-                layer.details();
-                println!("==================================");
-            }
+            count += layer.get_param_count();
         }
 
         println!("TOTAL_MODEL_PARAM_COUNT: {:?}", count);
