@@ -12,3 +12,9 @@ trait LayerCuda
     fn get_param_count(&self) -> f32;
     fn move_ptrs_to_arrays(&mut self);
 }
+
+// contains the usual pointers each layer will typically require
+pub struct LayerBaseStruct
+{
+    
+}
