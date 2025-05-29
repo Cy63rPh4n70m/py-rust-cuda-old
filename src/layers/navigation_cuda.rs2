@@ -1,0 +1,910 @@
+use std::process::exit;
+
+use ndarray::Array3;
+use serde::{Deserialize, Serialize};
+
+use crate::{cuda_bridge::{broadcast_2d_to_3d, copy_cuda_to_cuda, element_op_3d_inplace, mean_axis, new_cuda_array, scalar_op_3d_inplace, sum_axis, transpose_2d, zeroes_3d_inplace}, neuralnet::CudaTensorPtr, pointer_ops::{array_to_cuda_ptr, cuda_ptr_to_array, new_cuda_ptr_str, ptr_to_string, string_to_ptr}};
+
+use super::{activation_cuda::ActivationCuda, attention_kqv::KQVCuda, dense_cuda::DenseCuda, layer_norm_cuda::LayerNormCuda};
+
+#[derive(Serialize, Deserialize)]
+pub struct Navigation
+{
+    navigator_layer: DenseCuda, // produces vectors that move through high dim space
+    navigator_act_layer: ActivationCuda,
+    //navigator_output_layer: DenseCuda,
+    
+    //input_resizer_layer: DenseCuda,
+    input_resizer_act_layer: ActivationCuda,
+    aggregator_layer: DenseCuda, // combines output from sum of navigator and transpose of receptor
+    aggregator_norm_layer: LayerNormCuda,
+    value_norm_layer: LayerNormCuda,
+    value_act_layer: ActivationCuda,
+    aggregator_act_layer: ActivationCuda,
+    aggregator_resizer_layer: DenseCuda,
+
+    value_layer: DenseCuda,
+
+    latent_norm: LayerNormCuda,
+    output_embedding_norm_layer: LayerNormCuda,
+
+    input_resizer_bottleneck_layer: DenseCuda,
+    navigator_bottleneck_layer: DenseCuda,
+    navigator_norm_layer: LayerNormCuda,
+    latent_bottleneck_layer: DenseCuda,
+    value_bottleneck_layer: DenseCuda,
+    value_expand_layer: DenseCuda,
+
+    final_act_layer: ActivationCuda,
+
+    extra_dense_layer: DenseCuda,
+    extra_act_layer: ActivationCuda,
+    extra_norm_layer: LayerNormCuda,
+
+    // holds the transform matrices produced by each attention head
+    // all summed along first axis to produce a single transformation matrix
+    //pub head_embeddings3d: Array3<f32>,
+    
+    //pub input_tensor: Array3<f32>,
+    pub input_embedding_len: usize,
+    pub latent_embedding_len: usize,
+    pub input_resized_len: usize,
+    pub seq_len: usize,
+    pub n_heads: usize,
+    pub l2: f32, pub lr: f32, pub return_sequence: bool,
+
+    //pub input_embedding_ptr: String,
+    pub input_embedding_broadcasted_ptr: String,
+    pub input_embedding_broadcasted_t_ptr: String,
+    pub latent_ptr: String,
+    pub latent_resized_ptr: String,
+    pub input_resizer_ptr: String,
+    pub output_embedding_ptr: String,
+    pub output_embedding_vector_ptr: String,
+
+    // gradient ptrs
+    pub output_grads_broadcasted_ptr: String, // (1, seq_len, output)
+    pub output_grads_broadcasted_head_ptr: String, // (heads, seq_len, output)
+    pub grads_input_resizer: String,
+    pub grads_latent: String,
+    pub latent_grad_ptr: String,
+    pub latent_grad_broadcasted_ptr: String,
+    pub val_grads_t_ptr: String,
+    pub return_grads_val: String,
+    pub return_grads: String, // (1, seq_len, input)
+
+    pub ptrs_allocated: bool,
+    pub sub_layers_allocated: bool,
+}
+impl Navigation
+{
+    pub fn new(
+        n_heads: usize, 
+        input_embedding_len: usize,
+        latent_embedding_len: usize, 
+        input_resized_len: usize,
+        seq_len: usize,
+        return_sequence: bool, l2: f32, lr: f32,
+        ) -> Self
+    {
+        let navigator_bottleneck_layer: DenseCuda = DenseCuda::new(input_resized_len, l2, lr, true);
+        let navigator_layer: DenseCuda = DenseCuda::new(latent_embedding_len, l2, lr, true);
+        let navigator_act_layer: ActivationCuda = ActivationCuda::new("tanh", lr);
+        let navigator_norm_layer: LayerNormCuda = LayerNormCuda::new(lr, 2);
+        //let navigator_output_layer: DenseCuda = DenseCuda::new(latent_embedding_len, l2, lr, true);
+
+        let latent_bottleneck_layer: DenseCuda = DenseCuda::new(input_resized_len, l2, lr, true);
+
+        let input_resizer_bottleneck_layer: DenseCuda = DenseCuda::new(input_resized_len, l2, lr, true);
+        //let input_resizer_layer: DenseCuda = DenseCuda::new(latent_embedding_len, l2, lr, true);
+        let input_resizer_act_layer: ActivationCuda = ActivationCuda::new("tanh", lr);
+        
+        let aggregator_layer: DenseCuda = DenseCuda::new(input_resized_len, l2, lr, true);
+        let aggregator_norm_layer: LayerNormCuda = LayerNormCuda::new(lr, 2);
+        let aggregator_act_layer: ActivationCuda = ActivationCuda::new("silu", lr);
+        let aggregator_resizer_layer: DenseCuda = DenseCuda::new(input_embedding_len, l2, lr, true);
+        
+        let value_bottleneck_layer: DenseCuda = DenseCuda::new(input_resized_len, l2, lr, true);
+        let value_expand_layer: DenseCuda = DenseCuda::new(input_embedding_len, l2, lr, true);
+        let value_layer: DenseCuda = DenseCuda::new(input_resized_len, l2, lr, true);
+        let value_act_layer: ActivationCuda = ActivationCuda::new("tanh", lr);
+        let value_norm_layer: LayerNormCuda = LayerNormCuda::new(lr, 2);
+
+        let final_act_layer: ActivationCuda = ActivationCuda::new("tanh", lr);
+        
+        let latent_norm: LayerNormCuda = LayerNormCuda::new(lr, 2);
+        let output_embedding_norm_layer: LayerNormCuda = LayerNormCuda::new(lr, 2);
+        
+        let extra_dense_layer: DenseCuda = DenseCuda::new(input_embedding_len, l2, lr, true);
+        let extra_act_layer: ActivationCuda = ActivationCuda::new("silu", lr);
+        let extra_norm_layer: LayerNormCuda = LayerNormCuda::new(lr, 2);
+
+        // initialize the pointers
+        //let input_embedding_ptr: String = new_cuda_ptr_str(&[1, seq_len, input_embedding_len])
+
+        return Self
+        {
+            navigator_layer,
+            navigator_act_layer,
+            navigator_norm_layer,
+            //navigator_output_layer,
+
+            //input_resizer_layer,
+            input_resizer_act_layer,
+
+            aggregator_layer,
+            aggregator_act_layer,
+            aggregator_norm_layer,
+            aggregator_resizer_layer,
+            latent_norm,
+
+            value_layer,
+            value_norm_layer,
+            value_act_layer,
+
+            output_embedding_norm_layer,
+
+            navigator_bottleneck_layer,
+            input_resizer_bottleneck_layer,
+            latent_bottleneck_layer,
+            value_bottleneck_layer,
+            value_expand_layer,
+            final_act_layer,
+            extra_dense_layer, extra_act_layer,
+            extra_norm_layer,
+
+            //head_embeddings3d: Array3::zeros((n_attention_heads, seq_len, output_embedding_len)),
+
+            //input_tensor: Array3::zeros((0, 0, 0)),
+            input_embedding_len,
+            latent_embedding_len,
+            n_heads,
+            seq_len,
+            l2, lr, return_sequence,
+            input_resized_len,
+
+            //input_embedding_ptr,
+            input_embedding_broadcasted_ptr: "".to_string(),
+            input_embedding_broadcasted_t_ptr: "".to_string(),
+
+            latent_ptr: "".to_string(),
+            latent_resized_ptr: "".to_string(),
+            input_resizer_ptr: "".to_string(),
+
+            output_embedding_ptr: "".to_string(),
+            output_embedding_vector_ptr: "".to_string(),
+
+            // gradient pointers
+            output_grads_broadcasted_ptr: "".to_string(),
+            output_grads_broadcasted_head_ptr: "".to_string(),
+            grads_input_resizer: "".to_string(),
+            grads_latent: "".to_string(),
+            latent_grad_ptr: "".to_string(),
+            latent_grad_broadcasted_ptr: "".to_string(),
+
+            val_grads_t_ptr: "".to_string(),
+            return_grads_val: "".to_string(),
+            return_grads: "".to_string(),
+
+            ptrs_allocated: false,
+            sub_layers_allocated: false,
+        };
+    }
+
+    pub fn initialize_ptrs(&mut self)
+    {
+        self.input_embedding_broadcasted_ptr = new_cuda_ptr_str(&[self.n_heads, self.seq_len, self.input_embedding_len]);
+        self.input_embedding_broadcasted_t_ptr = new_cuda_ptr_str(&[self.n_heads, self.input_resized_len, self.seq_len]);
+        self.latent_ptr = new_cuda_ptr_str(&[self.n_heads, 1, self.latent_embedding_len]);
+        self.latent_resized_ptr = new_cuda_ptr_str(&[self.n_heads, 1, self.input_resized_len]);
+        self.input_resizer_ptr = new_cuda_ptr_str(&[self.n_heads, self.seq_len, self.input_resized_len]);
+
+        self.output_embedding_ptr = new_cuda_ptr_str(&[1, self.seq_len, self.input_embedding_len]);
+        self.output_embedding_vector_ptr = new_cuda_ptr_str(&[1, 1, self.input_embedding_len]);
+
+        self.output_grads_broadcasted_ptr = new_cuda_ptr_str(&[1, self.seq_len, self.input_embedding_len]);
+        self.output_grads_broadcasted_head_ptr = new_cuda_ptr_str(&[self.n_heads, self.seq_len, self.input_embedding_len]);
+        self.grads_input_resizer = new_cuda_ptr_str(&[self.n_heads, self.seq_len, self.input_resized_len]);
+        self.grads_latent = new_cuda_ptr_str(&[self.n_heads, self.seq_len, self.input_resized_len]);
+        self.latent_grad_ptr = new_cuda_ptr_str(&[self.n_heads, 1, self.input_resized_len]);
+        self.latent_grad_broadcasted_ptr = new_cuda_ptr_str(&[self.n_heads, self.seq_len, self.latent_embedding_len]);
+        self.val_grads_t_ptr = new_cuda_ptr_str(&[self.n_heads, self.input_resized_len, self.input_resized_len]);
+        self.return_grads_val = new_cuda_ptr_str(&[self.n_heads, self.seq_len, self.input_resized_len]);
+        self.return_grads = new_cuda_ptr_str(&[1, self.seq_len, self.input_embedding_len]);
+    }
+
+    // input_embeddings is 3D (1, seq_len, input_embedding_len)
+    pub fn forward(&mut self, input_embeddings_struct: &mut CudaTensorPtr)
+    {
+        if !self.ptrs_allocated
+        {
+            self.initialize_ptrs();
+            self.ptrs_allocated = true;
+        }
+
+        let input_embedding_broadcasted_ptr: *mut f32 = string_to_ptr(&self.input_embedding_broadcasted_ptr);
+        let input_embedding_broadcasted_t_ptr: *mut f32 = string_to_ptr(&self.input_embedding_broadcasted_t_ptr);
+        let latent_ptr: *mut f32 = string_to_ptr(&self.latent_ptr);
+        let latent_resized_ptr: *mut f32 = string_to_ptr(&self.latent_resized_ptr);
+        let input_resizer_ptr: *mut f32 = string_to_ptr(&self.input_resizer_ptr);
+        let output_embedding_ptr: *mut f32 = string_to_ptr(&self.output_embedding_ptr);
+        let output_embedding_vector_ptr: *mut f32 = string_to_ptr(&self.output_embedding_vector_ptr);
+
+        //println!("{:?}", cuda_ptr_to_array(input_embeddings_struct.get_ptr(), input_embeddings_struct.get_shape()));
+        // broadcast along z axis
+        //let start = Instant::now();
+        broadcast_2d_to_3d(
+            input_embedding_broadcasted_ptr, 
+            self.n_heads, self.seq_len, self.input_embedding_len, 
+            input_embeddings_struct.get_ptr(), 0, 0, true
+        );
+
+        // bottleneck the value layer
+        let mut val_ptr_struct: CudaTensorPtr = CudaTensorPtr {
+            tensor_ptr: ptr_to_string(input_embedding_broadcasted_ptr),
+            shape: vec![self.n_heads, self.seq_len, self.input_embedding_len]
+        };
+
+        self.value_bottleneck_layer.forward(&mut val_ptr_struct);
+
+        // for value matrix
+        transpose_2d(
+            input_embedding_broadcasted_t_ptr, 
+            val_ptr_struct.get_ptr(), 
+            self.n_heads, self.seq_len, self.input_resized_len
+        );
+
+        //let end = start.elapsed();
+        //println!("broadcast_2d_to_3d: {:?}", end.as_secs_f64());
+        //println!("{:?}", cuda_ptr_to_array(input_embedding_broadcasted_ptr, &[self.n_heads, self.seq_len, self.input_embedding_len]));
+
+        //exit(1);
+        // define pointer structs for passing through query and key layers
+        // make a second copy for passing through hidden layer and transformation layer
+        let mut navigator_ptr_struct: CudaTensorPtr = CudaTensorPtr {
+            tensor_ptr: ptr_to_string(input_embedding_broadcasted_ptr),
+            shape: vec![self.n_heads, self.seq_len, self.input_embedding_len]
+        };
+        let mut aggregator_ptr_struct: CudaTensorPtr = navigator_ptr_struct.clone();
+
+        val_ptr_struct.set_ptr(input_embedding_broadcasted_t_ptr, vec![self.n_heads, self.input_resized_len, self.seq_len]);
+
+        //let mut original_input_ptr_struct: CudaTensorPtr = key_ptr_struct.clone();
+
+        // make a copy of the broadcast 
+        //////////////////////////////////////////////////
+        // batch matrix multiplication to create key and query embeddings
+
+        //println!("{:?}", cuda_ptr_to_array(key_ptr_struct.get_ptr(), key_ptr_struct.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(query_ptr_struct.get_ptr(), query_ptr_struct.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(value_ptr_struct.get_ptr(), value_ptr_struct.get_shape()));
+        //println!("---------------------------------");
+        //self.navigator_bottleneck_layer.forward(&mut navigator_ptr_struct);
+        //self.latent_norm.forward(&mut navigator_ptr_struct);
+        self.navigator_layer.forward(&mut navigator_ptr_struct);
+        //self.navigator_norm_layer.forward(&mut navigator_ptr_struct);
+        //self.navigator_act_layer.forward(&mut navigator_ptr_struct);
+        //scalar_op_3d_inplace(navigator_ptr_struct.get_ptr(), 10.0, 0, self.n_heads, self.seq_len, self.latent_embedding_len);
+        //self.navigator_output_layer.forward(&mut navigator_ptr_struct);
+        self.input_resizer_bottleneck_layer.forward(&mut aggregator_ptr_struct);
+        //self.input_resizer_layer.forward(&mut aggregator_ptr_struct);
+        self.input_resizer_act_layer.forward(&mut aggregator_ptr_struct);
+        copy_cuda_to_cuda(input_resizer_ptr, aggregator_ptr_struct.get_ptr(), &[self.n_heads, self.seq_len, self.input_resized_len]);
+        
+        self.value_layer.forward(&mut val_ptr_struct);
+        self.value_act_layer.forward(&mut val_ptr_struct);
+
+        //println!("query_norm: {:?}", cuda_ptr_to_array(navigator_ptr_struct.get_ptr(), navigator_ptr_struct.get_shape()));
+        //exit(1);
+        //let start = Instant::now();
+        //self.kqv_layer.forward(&mut key_ptr_struct);
+        //let end = start.elapsed();
+        //println!("kqv: {:?}", end.as_secs_f64());
+        //println!("k_matrix: {:?}", cuda_ptr_to_array(string_to_ptr(&self.kqv_layer.k_weight_ptr), &[self.kqv_layer.k_in_shape.0, self.kqv_layer.k_in_shape.2, self.kqv_layer.k_out_shape.2]));
+        //println!("k_out: {:?}", cuda_ptr_to_array(string_to_ptr(&self.kqv_layer.k_result_ptr), &[self.kqv_layer.k_out_shape.0, self.kqv_layer.k_out_shape.1, self.kqv_layer.k_out_shape.2]));
+        //println!("q_matrix: {:?}", cuda_ptr_to_array(string_to_ptr(&self.kqv_layer.q_weight_ptr), &[self.kqv_layer.q_in_shape.0, self.kqv_layer.q_in_shape.2, self.kqv_layer.q_out_shape.2]));
+        //println!("q_out: {:?}", cuda_ptr_to_array(string_to_ptr(&self.kqv_layer.q_result_ptr), &[self.kqv_layer.q_out_shape.0, self.kqv_layer.q_out_shape.1, self.kqv_layer.q_out_shape.2]));
+        //println!("v_matrix: {:?}", cuda_ptr_to_array(string_to_ptr(&self.kqv_layer.v_weight_ptr), &[self.kqv_layer.v_in_shape.0, self.kqv_layer.v_in_shape.2, self.kqv_layer.v_out_shape.2]));
+        //println!("v_out: {:?}", cuda_ptr_to_array(string_to_ptr(&self.kqv_layer.v_result_ptr), &[self.kqv_layer.v_out_shape.0, self.kqv_layer.v_out_shape.1, self.kqv_layer.v_out_shape.2]));
+        
+        //println!("{:?}", cuda_ptr_to_array(query_ptr_struct.get_ptr(), query_ptr_struct.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(value_ptr_struct.get_ptr(), value_ptr_struct.get_shape()));
+
+        //exit(1);
+
+        //println!("{:?}", cuda_ptr_to_array(key_ptr_struct.get_ptr(), key_ptr_struct.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(query_ptr_struct.get_ptr(), query_ptr_struct.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(value_ptr_struct.get_ptr(), value_ptr_struct.get_shape()));
+
+        // sum navigation output along axis 1
+        // move in the high dimensional space
+
+        let shape: &[usize] = navigator_ptr_struct.get_shape();
+        //println!("{:?}", shape);
+
+        //println!("{:?}", cuda_ptr_to_array(navigator_ptr_struct.get_ptr(), navigator_ptr_struct.get_shape()));
+        sum_axis(
+            latent_ptr, 
+            navigator_ptr_struct.get_ptr(), 
+            shape[0], shape[1], shape[2],
+            1, true
+        );
+        //println!("{:?}", cuda_ptr_to_array(latent_ptr, &[self.n_heads, 1, self.latent_embedding_len]));
+
+        scalar_op_3d_inplace(
+            latent_ptr, 
+            (self.seq_len as f32).sqrt(), 3, 
+            self.n_heads, 1, self.latent_embedding_len
+        );
+        //println!("{:?}", cuda_ptr_to_array(latent_ptr, &[self.n_heads, 1, self.latent_embedding_len]));
+        //exit(1);
+
+        //println!("latent_coord: {:?}", cuda_ptr_to_array(latent_ptr, &[self.n_heads, 1, self.input_resized_len]));
+        //exit(1);
+        // overwrite the existing result of navigator_ptr_struct
+        navigator_ptr_struct.set_ptr(latent_ptr, vec![self.n_heads, 1, self.latent_embedding_len]);
+        self.latent_bottleneck_layer.forward(&mut navigator_ptr_struct);
+
+        // store resized latent coordinate for backprop
+        copy_cuda_to_cuda(latent_resized_ptr, navigator_ptr_struct.get_ptr(), &[self.n_heads, 1, self.input_resized_len]);
+
+        //println!("latent_coord: {:?}", cuda_ptr_to_array(navigator_ptr_struct.get_ptr(), &[self.n_heads, 1, self.input_resized_len]));
+
+        // broadcast multiply the latent ptr along the axis 1
+        broadcast_2d_to_3d(
+            aggregator_ptr_struct.get_ptr(), 
+            self.n_heads, self.seq_len, self.input_resized_len, 
+            navigator_ptr_struct.get_ptr(), 
+            1, 2, false
+        );
+
+        //println!("latent_coord: {:?}", cuda_ptr_to_array(latent_broadcasted_ptr, &[self.n_heads, self.input_resized_len, self.input_resized_len]));
+        //exit(1);
+        // set the broadcasted latent coordinate as the weights
+        // for aggregator
+
+        self.aggregator_layer.set_weights_from_ptr(
+            val_ptr_struct.get_ptr(),
+            (self.n_heads, self.input_resized_len, self.input_resized_len), 
+            true,
+        );
+        //println!("{:?}", cuda_ptr_to_array(string_to_ptr(&self.attention_layer.weight_ptr),  &[shape[0], shape[2], shape[1]]));
+
+        //key_ptr_struct.set_ptr(
+        //    string_to_ptr(&self.kqv_layer.k_result_ptr), 
+        //    vec![shape.0, shape.1, shape.2]
+        //);
+        //let end = start.elapsed();
+        //println!("set_weights: {:?}", end.as_secs_f64());
+        //    tensor_ptr: ptr_to_string(input_embedding_broadcasted_ptr),
+        //    shape: vec![self.n_attention_heads, self.seq_len, self.input_embedding_len]
+        //};
+
+        // calculate attention scores and record key/query matrices
+        //println!("{:?}", cuda_ptr_to_array(key_ptr_struct.get_ptr(), &[shape.0, shape.1, shape.2]));
+        //println!("{:?}", cuda_ptr_to_array(query_ptr_struct.get_ptr(), query_ptr_struct.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(string_to_ptr(&self.attention_layer.weight_ptr), &[shape.0, shape.2, shape.1]));
+        //let start = Instant::now();
+        self.aggregator_layer.forward(&mut aggregator_ptr_struct);
+        //self.aggregator_norm_layer.forward(&mut aggregator_ptr_struct);
+        //self.value_norm_layer.forward(&mut aggregator_ptr_struct);
+        //self.aggregator_act_layer.forward(&mut aggregator_ptr_struct);
+        self.aggregator_resizer_layer.forward(&mut aggregator_ptr_struct);
+        //self.final_act_layer.forward(&mut aggregator_ptr_struct);
+        //scalar_op_3d_inplace(
+        //    aggregator_ptr_struct.get_ptr(), 
+        //    (self.input_resized_len as f32).sqrt(), 3, 
+        //    self.n_heads, self.seq_len, self.input_embedding_len
+        //);
+        
+        //println!("{:?}", cuda_ptr_to_array(aggregator_ptr_struct.get_ptr(), aggregator_ptr_struct.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(key_ptr_struct.get_ptr(), key_ptr_struct.get_shape()));
+        //exit(1);
+
+        //zeroes_3d_inplace(output_embedding_ptr, 1, self.seq_len, self.input_embedding_len);
+
+        //let start = Instant::now();
+        // concatenate the navigation heads
+        sum_axis(
+            output_embedding_ptr, aggregator_ptr_struct.get_ptr(), 
+            self.n_heads, self.seq_len, self.input_embedding_len, 
+            0, true
+        );
+
+        //scalar_op_3d_inplace(
+        //    output_embedding_ptr, 
+        //    (self.n_heads as f32).sqrt(), 3, 
+        //    1, self.seq_len, self.input_embedding_len
+        //);
+        //let end = start.elapsed();
+        //println!("sum: {:?}", end.as_secs_f64());
+        //let end: Instant = Instant::now();
+        //let duration = end.duration_since(start);
+        //let secs = duration.as_secs_f64();
+
+        //println!("time: {:?}", secs);
+
+        //println!("{:?}", cuda_ptr_to_array(output_embedding_ptr, &[1, self.seq_len, self.input_embedding_len]));
+        //exit(1);
+        //println!("{:?}", cuda_ptr_to_array(input_embeddings_struct.get_ptr(), input_embeddings_struct.get_shape()));
+        
+        // add the original input embeddings (transforms the input embedding)
+        //let start = Instant::now(); 
+        sum_axis(
+            output_embedding_ptr, 
+            input_embeddings_struct.get_ptr(), 
+            1, self.seq_len, self.input_embedding_len, 
+            0, false
+        );
+        //let end = start.elapsed();
+        //println!("sum: {:?}", end.as_secs_f64());
+
+        //println!("{:?}", cuda_ptr_to_array(output_embedding_ptr, &[1, self.seq_len, self.input_embedding_len]));
+        //exit(1);
+        //println!("{:?}", cuda_ptr_to_array(output_embedding_ptr, &[1, self.seq_len, self.output_embedding_len]));
+        //let embeddings_sum: Array3<f32> = (self.head_embeddings3d.sum_axis(Axis(0))).insert_axis(Axis(0));
+
+        //let mut output_embeddings: ArrayD<f32> = embeddings_sum.into_dyn();
+        
+        //let input_tensors3d: Array3<f32> = input_embeddings.into_dimensionality().unwrap();
+        //self.input_tensor = input_tensors3d;
+
+        input_embeddings_struct.set_ptr(
+            output_embedding_ptr, 
+            vec![1, self.seq_len, self.input_embedding_len]
+        );
+
+        //scalar_op_3d_inplace(
+        //    input_embeddings_struct.get_ptr(), 
+        //    (self.n_heads as f32).sqrt(), 3, 
+        //    1, self.seq_len, self.input_embedding_len
+        //);
+
+        //let start = Instant::now(); 
+        if self.return_sequence
+        {
+            //input_embeddings_struct.set_ptr(
+            //    output_embedding_ptr, 
+            //    vec![1, self.seq_len, self.input_embedding_len]
+            //);
+        //    output_embeddings = output_embeddings.mean_axis(Axis(1)).unwrap();
+        //    output_embeddings = output_embeddings.broadcast((1, self.output_embedding_len)).unwrap().into_dyn().into_owned();
+        }
+        else
+        {
+           // zeroes_3d_inplace(output_embedding_vector_ptr, 1, 1, self.input_embedding_len);
+            sum_axis(
+                output_embedding_vector_ptr, input_embeddings_struct.get_ptr(), 
+                1, self.seq_len, self.input_embedding_len, 
+                1, true
+            );
+
+            input_embeddings_struct.set_ptr(
+                output_embedding_vector_ptr, 
+                vec![1, 1, self.input_embedding_len]
+            );
+
+            //scalar_op_3d_inplace(
+            //    input_embeddings_struct.get_ptr(), 
+            //    (self.seq_len as f32).sqrt(), 3, 
+            //    1, 1, self.input_embedding_len
+            //);
+        }
+
+        self.output_embedding_norm_layer.forward(input_embeddings_struct);
+        /*
+        // extra residual connection
+        let residual_input: CudaTensorPtr = input_embeddings_struct.clone();
+        self.extra_dense_layer.forward(input_embeddings_struct);
+        self.extra_act_layer.forward(input_embeddings_struct);
+        sum_axis(
+            input_embeddings_struct.get_ptr(), 
+            residual_input.get_ptr(), 
+            1, self.seq_len, self.input_embedding_len, 
+            0, false
+        );
+
+        self.extra_norm_layer.forward(input_embeddings_struct);
+        */
+
+        //let end = start.elapsed();
+        //println!("sum_and_norm: {:?}", end.as_secs_f64());
+
+        //println!("{:?}", cuda_ptr_to_array(input_embeddings_struct.get_ptr(), input_embeddings_struct.get_shape()));
+        //exit(1);
+    }
+
+    pub fn backward(&mut self, grads: &mut CudaTensorPtr)
+    {
+        let output_grads_broadcasted_ptr: *mut f32 = string_to_ptr(&self.output_grads_broadcasted_ptr);
+        let output_grads_broadcasted_head_ptr: *mut f32 = string_to_ptr(&self.output_grads_broadcasted_head_ptr);
+        let grads_input_resizer: *mut f32 = string_to_ptr(&self.grads_input_resizer);
+        let grads_latent: *mut f32 = string_to_ptr(&self.grads_latent);
+        let latent_grad_ptr: *mut f32 = string_to_ptr(&self.latent_grad_ptr);
+        let latent_grad_broadcasted_ptr: *mut f32 = string_to_ptr(&self.latent_grad_broadcasted_ptr);
+        let val_grads_t_ptr: *mut f32 = string_to_ptr(&self.val_grads_t_ptr);
+        let return_grads_val: *mut f32 = string_to_ptr(&self.return_grads_val);
+        let return_grads: *mut f32 = string_to_ptr(&self.return_grads);
+
+        let latent_ptr: *mut f32 = string_to_ptr(&self.latent_ptr);
+        let latent_resized_ptr: *mut f32 = string_to_ptr(&self.latent_resized_ptr);
+        let input_resizer_ptr: *mut f32 = string_to_ptr(&self.input_resizer_ptr);
+        
+        /*
+        self.extra_norm_layer.backward(grads);
+        let residual_grads: CudaTensorPtr = grads.clone();
+        self.extra_act_layer.backward(grads);
+        self.extra_dense_layer.backward(grads);
+        sum_axis(
+            grads.get_ptr(), 
+            residual_grads.get_ptr(), 
+            1, self.seq_len, self.input_embedding_len, 
+            0, false
+        );
+        */
+        self.output_embedding_norm_layer.backward(grads);
+
+        //println!("{:?}", cuda_ptr_to_array(grads.get_ptr(), grads.get_shape()));
+        if self.return_sequence
+        {
+            // already (1, seq_len, output_embedding)
+            // pass
+        }
+        else
+        {
+            // the mean of embeddings was returned instead
+            // (1, 1, output_embedding)
+
+            //backpropagate through mean 
+            // mean =  embeddings / y_length
+            // derivative mean = 1 / y_length
+
+            // broadcast along y axis and divide by seq_len
+
+            //scalar_op_3d_inplace(
+            //    grads.get_ptr(), 
+            //    (self.seq_len as f32).sqrt(), 3, 
+            //    1, 1, self.input_embedding_len
+            //);
+
+            broadcast_2d_to_3d(
+                output_grads_broadcasted_ptr, 
+                1, self.seq_len, self.input_embedding_len, 
+                grads.get_ptr(), 1, 0, true
+            );
+
+            grads.set_ptr(output_grads_broadcasted_ptr, vec![1, self.seq_len, self.input_embedding_len]);
+        }
+
+        //scalar_op_3d_inplace(
+        //    grads.get_ptr(), 
+        //    (self.n_heads as f32).sqrt(), 3, 
+        //    1, self.seq_len, self.input_embedding_len
+        //);
+
+        //println!("{:?}", cuda_ptr_to_array(grads.get_ptr(), grads.get_shape()));
+        //println!("{:?}", cuda_ptr_to_array(return_grads, grads.get_shape()));
+        // add gradients directly to return grads due to residual connection
+        //zeroes_3d_inplace(return_grads, 1, self.seq_len, self.input_embedding_len);
+        
+
+        // sum due to residual connection
+        sum_axis(
+            return_grads, 
+            grads.get_ptr(),
+            1, self.seq_len, self.input_embedding_len,
+            0, true
+        );
+
+        //scalar_op_3d_inplace(
+        //    grads.get_ptr(), 
+        //    (self.n_heads as f32).sqrt(), 3, 
+        //    1, self.seq_len, self.input_embedding_len
+        //);
+
+        //println!("{:?}", cuda_ptr_to_array(return_grads, &[1, self.seq_len, self.input_embedding_len]));
+        //println!("{:?}", cuda_ptr_to_array(grads.get_ptr(), grads.get_shape()));
+        //exit(1);
+
+        // backpropagate through summation along first axis
+        // broadcast along z axis, inverse of concatenating heads
+        broadcast_2d_to_3d(
+            output_grads_broadcasted_head_ptr, 
+            self.n_heads, self.seq_len, self.input_embedding_len, 
+            grads.get_ptr(), 0, 0, true
+        );
+        
+        grads.set_ptr(
+            output_grads_broadcasted_head_ptr, 
+            vec![self.n_heads, self.seq_len, self.input_embedding_len]
+        );
+
+        //println!("{:?}", cuda_ptr_to_array(grads.get_ptr(), grads.get_shape()));
+
+        // backpropagate through aggregator resizer layer
+        //scalar_op_3d_inplace(
+        //    grads.get_ptr(), 
+        //    1.0 / (self.input_resized_len as f32).sqrt(), 2, 
+        //    self.n_heads, self.seq_len, self.input_embedding_len
+        //);
+        //self.final_act_layer.backward(grads);
+        self.aggregator_resizer_layer.backward(grads);
+        //self.aggregator_act_layer.backward(grads);
+        //self.value_norm_layer.backward(grads);
+        //self.aggregator_norm_layer.backward(grads);
+        self.aggregator_layer.backward(grads);
+
+        // gradient from grads needs to be copied two times, due to the product
+        // between the input resizer output and 1d latent vector, and both
+        // need to be multiplied with separate coefficients
+        copy_cuda_to_cuda(grads_input_resizer, grads.get_ptr(), &[self.n_heads, self.seq_len, self.input_resized_len]);
+        copy_cuda_to_cuda(grads_latent, grads.get_ptr(), &[self.n_heads, self.seq_len, self.input_resized_len]);
+        //println!("{:?}", cuda_ptr_to_array(grads_input_resizer, &[self.n_heads, self.seq_len, self.input_resized_len]));
+        //exit(1);
+        let mut grads_input_resizer_struct: CudaTensorPtr = CudaTensorPtr
+        {
+            tensor_ptr: ptr_to_string(grads_input_resizer),
+            shape: vec![self.n_heads, self.seq_len, self.input_resized_len]
+        };
+
+        // for input resizer, the latent vector was multiplied, use broadcast multiply
+        broadcast_2d_to_3d(
+            grads_input_resizer_struct.get_ptr(), 
+            self.n_heads, self.seq_len, self.input_resized_len,
+            latent_resized_ptr, 
+            1, 2, false
+        );
+
+        // for latent vector, the input resizer output was multiplied, use elementwise multiply
+        element_op_3d_inplace(
+            grads_latent, input_resizer_ptr, 
+            2, 
+            self.n_heads, self.seq_len, self.input_resized_len,
+        );
+
+        // backpropagating through input resizer
+        self.input_resizer_act_layer.backward(&mut grads_input_resizer_struct);
+        //self.input_resizer_layer.backward(&mut grads_input_resizer_struct);
+        self.input_resizer_bottleneck_layer.backward(&mut grads_input_resizer_struct);
+
+        sum_axis(
+            return_grads,
+            grads_input_resizer_struct.get_ptr(),
+            self.n_heads, self.seq_len, self.input_embedding_len,
+            0, false
+        );
+        
+        // backpropagating through latent space branch
+        // gradients is now input resized, weight gradients is broadcasted latent space
+        //let latent_space_broadcasted_grads: *mut f32 = self.aggregator_layer.get_weight_grads_as_ptr();
+        let latent_space_shape: Vec<usize> = vec![self.n_heads, 1, self.input_resized_len];
+
+        // sum broadcasted latent gradients across axis 1, inverse of broadcasting along axis 1
+        sum_axis(
+            latent_grad_ptr, grads_latent, 
+            self.n_heads, self.seq_len, self.input_resized_len, 
+            1, true
+        );
+        
+        let mut latent_space_struct: CudaTensorPtr = CudaTensorPtr
+        {
+            tensor_ptr: ptr_to_string(latent_grad_ptr),
+            shape: latent_space_shape
+        };
+
+        self.latent_bottleneck_layer.backward(&mut latent_space_struct);
+
+        //println!("{:?}", cuda_ptr_to_array(latent_space_struct.get_ptr(), latent_space_struct.get_shape()));
+
+        // backpropagate through latent normalization layer
+
+        scalar_op_3d_inplace(
+            latent_space_struct.get_ptr(), 
+            1.0 / (self.seq_len as f32).sqrt(), 2, 
+            self.n_heads, 1, self.latent_embedding_len
+        );
+        //println!("{:?}", cuda_ptr_to_array(latent_space_struct.get_ptr(), latent_space_struct.get_shape()));
+
+        // broadcast along axis 1, inverse of summing
+        broadcast_2d_to_3d(
+            latent_grad_broadcasted_ptr, 
+            self.n_heads, self.seq_len, self.latent_embedding_len, 
+            latent_space_struct.get_ptr(), 
+            1, 0, true
+        );
+
+        latent_space_struct.set_ptr(
+            latent_grad_broadcasted_ptr, 
+            vec![self.n_heads, self.seq_len, self.latent_embedding_len]
+        );
+        //println!("{:?}", cuda_ptr_to_array(latent_space_struct.get_ptr(), latent_space_struct.get_shape()));
+        //exit(1);
+        //self.navigator_output_layer.backward(&mut latent_space_struct);
+        //scalar_op_3d_inplace(latent_space_struct.get_ptr(), 10.0, 0, self.n_heads, self.seq_len, self.latent_embedding_len);
+        //self.navigator_act_layer.backward(&mut latent_space_struct);
+        //self.navigator_norm_layer.backward(&mut latent_space_struct);
+        self.navigator_layer.backward(&mut latent_space_struct);
+        //println!("{:?}", cuda_ptr_to_array(latent_space_struct.get_ptr(), latent_space_struct.get_shape()));
+        //self.latent_norm.backward(&mut latent_space_struct);
+        //self.navigator_bottleneck_layer.backward(&mut latent_space_struct);
+        //println!("{:?}", cuda_ptr_to_array(val_grads_struct.get_ptr(), val_grads_struct.get_shape()));
+
+        //exit(1);
+        // due to broadcasting along the z axis
+        sum_axis(
+            return_grads, 
+            latent_space_struct.get_ptr(),
+            self.n_heads, self.seq_len, self.input_embedding_len,
+            0, false
+        );
+
+        //println!("{:?}", cuda_ptr_to_array(return_grads, &[1, self.seq_len, self.input_embedding_len]));
+        //exit(1);
+        // backpropagate through value matrix
+        /**/
+        let val_grads_ptr: *mut f32 = self.aggregator_layer.get_weight_grads_as_ptr();
+        //println!("{:?}", cuda_ptr_to_array(val_grads_ptr, &[self.n_heads, self.input_resized_len, self.input_resized_len]));
+        transpose_2d(val_grads_t_ptr, val_grads_ptr, 
+            self.n_heads, self.input_resized_len, self.input_resized_len
+        );
+        //println!("{:?}", cuda_ptr_to_array(val_grads_t_ptr, &[self.n_heads, self.input_resized_len, self.input_resized_len]));
+        //exit(1);
+
+        let mut val_grads_struct: CudaTensorPtr = CudaTensorPtr
+        {
+            tensor_ptr: ptr_to_string(val_grads_t_ptr),
+            shape: vec![self.n_heads, self.input_resized_len, self.input_resized_len]
+        };
+
+        //println!("{:?}", cuda_ptr_to_array(val_grads_struct.get_ptr(), val_grads_struct.get_shape()));
+        self.value_act_layer.backward(&mut val_grads_struct);
+        self.value_layer.backward(&mut val_grads_struct);
+        //println!("{:?}", cuda_ptr_to_array(val_grads_struct.get_ptr(), val_grads_struct.get_shape()));
+        //exit(1);
+        
+
+        transpose_2d(
+            return_grads_val,
+            val_grads_struct.get_ptr(), 
+            self.n_heads, self.input_resized_len, self.seq_len
+        );
+
+        val_grads_struct.set_ptr(return_grads_val, vec![self.n_heads, self.seq_len, self.input_resized_len]);
+        self.value_bottleneck_layer.backward(&mut val_grads_struct);
+        //println!("{:?}", cuda_ptr_to_array(val_grads_struct.get_ptr(), val_grads_struct.get_shape()));
+
+        //println!("{:?}", cuda_ptr_to_array(return_grads, &[1, self.seq_len, self.input_embedding_len]));
+        sum_axis(
+            return_grads, 
+            val_grads_struct.get_ptr(), 
+            self.n_heads, self.seq_len, self.input_embedding_len,
+            0, false
+        );
+        //println!("{:?}", cuda_ptr_to_array(return_grads, &[1, self.seq_len, self.input_embedding_len]));
+        //exit(1);
+        /**/
+
+        grads.set_ptr(
+            return_grads, 
+            vec![1, self.seq_len, self.input_embedding_len]
+        );
+        //println!("{:?}", cuda_ptr_to_array(grads.get_ptr(), grads.get_shape()));
+        //exit(1);
+        //println!("{:?}", query_grads);
+
+        // sum both grads for final gradients to output from head
+        // shape (seq_len, input_embeddings)
+        //println!("{:?}", final_grads);
+
+        //return final_grads;
+    }
+
+    pub fn update_params(&mut self)
+    {
+        //self.navigator_bottleneck_layer.update_params(false);
+        self.navigator_layer.update_params(false);
+        //self.navigator_norm_layer.update_params();
+        //self.navigator_act_layer.update_params();
+        //self.navigator_output_layer.update_params(false);
+
+        self.input_resizer_bottleneck_layer.update_params(false);
+        //self.input_resizer_layer.update_params(false);
+        self.input_resizer_act_layer.update_params();
+
+        self.aggregator_layer.update_params(true);
+
+        self.value_layer.update_params(false);
+        
+        //self.aggregator_norm_layer.update_params();
+        //self.aggregator_act_layer.update_params();
+        //self.value_norm_layer.update_params();
+        self.value_act_layer.update_params();
+        //self.final_act_layer.update_params();
+        self.aggregator_resizer_layer.update_params(false);
+        self.value_bottleneck_layer.update_params(false);
+        self.latent_bottleneck_layer.update_params(false);
+
+        //self.extra_dense_layer.update_params(false);
+        //self.extra_act_layer.update_params();
+        //self.extra_norm_layer.update_params();
+        //self.latent_norm.update_params();
+        self.output_embedding_norm_layer.update_params();
+    }
+
+    pub fn zero_grads(&mut self)
+    {
+        //self.key_layer.zero_grads();
+        //self.key_norm.zero_grads();
+        //self.key_layer_act.zero_grads();
+        //self.query_layer.zero_grads();
+        //self.query_norm.zero_grads();
+        //self.query_layer_act.zero_grads();
+        //self.attention_layer.zero_grads();
+        //self.attention_norm.zero_grads();
+        //self.attention_layer_act.zero_grads();
+        //self.seq_input_layer.zero_grads();
+        //self.seq_input_norm.zero_grads();
+        //self.seq_input_layer_act.zero_grads();
+        //self.seq_output_layer.zero_grads();
+        //self.seq_output_norm.zero_grads();
+        //self.seq_output_layer_act.zero_grads();
+        //self.hidden_layer.zero_grads();
+        //self.hidden_norm.zero_grads();
+        //self.hidden_layer_act.zero_grads();
+        //self.transform_layer.zero_grads();
+        //self.transform_norm.zero_grads();
+        //self.transform_layer_act.zero_grads();
+    }
+
+    pub fn details(&self)
+    {
+        /*
+        println!("KEY_MATRICES:");
+        for i in 0..self.n_attention_heads
+        {
+            self.attention_heads[i].key_layer.details();
+        }
+        println!("======================================");
+        println!("QUERY_MATRICES:");
+        for i in 0..self.n_attention_heads
+        {
+            self.attention_heads[i].query_layer.details();
+        }
+        println!("=====================================");
+        */
+    }
+
+    pub fn move_ptrs_to_arrays(&mut self)
+    {
+        //self.navigator_bottleneck_layer.move_ptrs_to_arrays(false);
+        self.navigator_layer.move_ptrs_to_arrays(false);
+        //self.navigator_norm_layer.move_ptrs_to_arrays();
+        //self.navigator_act_layer.move_ptrs_to_arrays();
+        //self.navigator_output_layer.move_ptrs_to_arrays(false);
+
+        self.input_resizer_bottleneck_layer.move_ptrs_to_arrays(false);
+        //self.input_resizer_layer.move_ptrs_to_arrays(false);
+        self.input_resizer_act_layer.move_ptrs_to_arrays();
+
+        self.aggregator_layer.move_ptrs_to_arrays(true);
+        self.value_layer.move_ptrs_to_arrays(false);
+        //self.aggregator_norm_layer.move_ptrs_to_arrays();
+        //self.aggregator_act_layer.move_ptrs_to_arrays();
+        //self.value_norm_layer.move_ptrs_to_arrays();
+        self.value_act_layer.move_ptrs_to_arrays();
+        //self.final_act_layer.move_ptrs_to_arrays();
+        
+        self.aggregator_resizer_layer.move_ptrs_to_arrays(false);
+        self.value_bottleneck_layer.move_ptrs_to_arrays(false);
+        self.latent_bottleneck_layer.move_ptrs_to_arrays(false);
+        //self.latent_norm.move_ptrs_to_arrays();
+        self.output_embedding_norm_layer.move_ptrs_to_arrays();
+
+        //self.extra_dense_layer.move_ptrs_to_arrays(false);
+        //self.extra_act_layer.move_ptrs_to_arrays();
+        //self.extra_norm_layer.move_ptrs_to_arrays();
+
+        self.ptrs_allocated = false;
+    }
+
+}

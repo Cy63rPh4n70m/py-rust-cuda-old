@@ -1,0 +1,533 @@
+
+
+use ndarray::{ArrayD, IxDyn};
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+
+use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr}};
+
+#[derive(Serialize, Deserialize)]
+pub struct DenseCuda
+{
+    pub name: String,
+    pub in_shape: (usize, usize, usize),
+    pub out_shape: (usize, usize, usize),
+    pub n_out: usize,
+
+    pub input: ArrayD<f32>,
+    pub weights: ArrayD<f32>,
+    pub biases: ArrayD<f32>,
+
+    //pub io_ptrs: HashMap<String, String>,
+    pub output_traverse_ptr: String,
+
+    pub biases_ptr: String,
+    pub bias_gradients_ptr: String,
+    pub bias_velocity_ptr: String,
+    pub bias_momentum_ptr: String,
+    pub weight_ptr: String,
+    pub weight_grad_ptr: String,
+    pub weight_velocity_ptr: String,
+    pub weight_momentum_ptr: String,
+    pub output_ptr: String,
+    pub output_grad_ptr: String,
+
+    pub input_ptr: String,
+    pub input_grad_ptr: String,
+
+    pub backward_count: String,
+    pub backward_count_weight_prev: String,
+    pub backward_count_in_prev: String,
+
+    pub batch_size: f32,
+    pub count: u128,
+
+    pub weight_ptr_allocated: bool, 
+    pub bias_ptr_allocated: bool, 
+    pub weight_array_allocated: bool,
+    pub bias_array_allocated: bool,
+    pub use_bias: bool,
+    pub zero_output: bool,
+    pub zero_input_grad: bool,
+    pub zero_weight_grad: bool
+}
+impl DenseCuda
+{
+    // weight matrix initialize during first ever run
+    pub fn new(
+        n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, name: &str
+    ) -> Self
+    {
+        let weights: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
+        let biases: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
+        
+        return Self
+        {
+            //io_ptrs,
+            name: name.to_string(),
+            input: ArrayD::zeros(IxDyn(&[0])),
+            weights,
+            weight_velocity_ptr: "".to_string(),
+            weight_momentum_ptr: "".to_string(),
+            
+            output_traverse_ptr: String::from("none"),
+
+            biases,
+            biases_ptr: "".to_string(),
+            bias_gradients_ptr: "".to_string(),
+            bias_velocity_ptr: "".to_string(),
+            bias_momentum_ptr: "".to_string(),
+            weight_ptr: "".to_string(),
+            weight_grad_ptr: "".to_string(),
+            input_ptr: "".to_string(),
+            input_grad_ptr: "".to_string(),
+            output_ptr: "".to_string(),
+            output_grad_ptr: "".to_string(),
+            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
+            //broadcast_array_ptr: "".to_string(),
+            //output_ptr_t: "".to_string(),
+            in_shape: (batch, rows, n_in),
+            out_shape: (batch, rows, n_out),
+            n_out,
+
+            backward_count: String::from("none"),
+            backward_count_weight_prev: String::from("none"),
+            backward_count_in_prev: String::from("none"),
+
+            batch_size: 0.0,
+            count: 0,
+            weight_ptr_allocated: false, 
+            bias_ptr_allocated: false,
+            weight_array_allocated: false,
+            bias_array_allocated: false,
+            //grads_ptr_allocated: false,
+            use_bias,
+            zero_input_grad: false,
+            zero_output: true,
+            zero_weight_grad: false
+        }
+    }
+
+    // assumes 3 dimensional weights
+    /*
+    pub fn set_weights_from_ptr(
+        &mut self, 
+        tensor_ptr: *mut f32, 
+        shape: (usize, usize, usize), 
+        transpose_before_copy: bool)
+    {   
+        if !self.weight_ptr_allocated
+        {
+            if transpose_before_copy
+            {
+                self.weight_ptr = new_cuda_ptr_str(&[shape.0, shape.2, shape.1]);
+                self.weight_gradients_ptr = new_cuda_ptr_str(&[shape.0, shape.2, shape.1]);
+                self.weight_velocity_ptr = new_cuda_ptr_str(&[shape.0, shape.2, shape.1]);
+            }
+            else
+            {
+                self.weight_ptr = new_cuda_ptr_str(&[shape.0, shape.1, shape.2]);
+                self.weight_gradients_ptr = new_cuda_ptr_str(&[shape.0, shape.1, shape.2]);
+                self.weight_velocity_ptr = new_cuda_ptr_str(&[shape.0, shape.1, shape.2]);
+            }
+            self.weight_ptr_allocated = true;
+            self.weight_array_allocated = true;
+        }
+
+        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
+
+        if transpose_before_copy
+        {
+            transpose_2d(weight_ptr, tensor_ptr, shape.0, shape.1, shape.2);
+        }
+        else
+        {
+            copy_cuda_to_cuda(weight_ptr, tensor_ptr, &[shape.0, shape.1, shape.2]);
+        }
+    }
+    */
+
+    //pub fn get_weight_grads_as_ptr(&mut self) -> *mut f32
+    //{
+    //    return string_to_ptr(&self.weight_gradients_ptr);
+    //}
+
+    // supports batch matrix multiplication unlike cpu
+    pub fn forward(&mut self, str_ptr_in: String, str_ptr_weight: String) -> String
+    {
+        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
+        let batch: usize = self.in_shape.0;
+        let rows: usize = self.in_shape.1;
+        let cols: usize = self.in_shape.2;
+
+        ////println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
+
+        let range: f32 = (6.0 / (cols + self.n_out) as f32).sqrt();
+
+        if !self.bias_ptr_allocated
+        {   
+            // initialise biases and pointers
+            if !self.bias_array_allocated
+            {
+                self.biases = ArrayD::from_shape_fn(
+                    IxDyn(&[batch, rows, self.n_out]), 
+                    |_| rand::thread_rng().gen_range(-range..range)
+                );
+                self.bias_array_allocated = true
+            }
+
+            self.biases_ptr = array_to_cuda_ptr_str(&mut self.biases);
+            self.bias_gradients_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
+            self.bias_velocity_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
+            self.weight_velocity_ptr = new_cuda_ptr_str(&[batch, cols, self.n_out]);
+            self.bias_momentum_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
+            self.weight_momentum_ptr = new_cuda_ptr_str(&[batch, cols, self.n_out]);
+            
+
+            // initialise input pointer, set the input as the result pointer from previous layer
+            // tensor struct at this stage will contain the result ptr of the previous layer
+            ////////////////////////////////////////////////////////////////
+            //self.input_ptr = input.get_ptr_as_str();
+            //self.input_t_ptr = new_cuda_ptr_str(&[batch, cols, rows]);
+            //////////////////////////////////////////////////////////////////
+
+            // initialise the result tensor/pointer
+            //self.output_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
+            //self.output_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
+            
+            //self.input_grads_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
+            //self.output_grads_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
+
+            //self.in_shape = (batch, rows, cols);
+            //self.out_shape = (batch, rows, self.n_out);
+
+            self.bias_ptr_allocated = true;
+
+            // weights are trainable and stored in layer
+            if !self.weight_ptr_allocated
+            {
+                if str_ptr_weight == "none"
+                {
+                    if !self.weight_array_allocated
+                    {
+                        // initialise weights and weight pointer
+                        self.weights = ArrayD::from_shape_fn(
+                            IxDyn(&[batch, cols, self.n_out]), 
+                            |_| rand::thread_rng().gen_range(-range..range)
+                        );
+
+                        self.weight_array_allocated = true;
+                        
+                    }
+                    self.weight_ptr = array_to_cuda_ptr_str(&mut self.weights);
+                    self.weight_grad_ptr = new_cuda_ptr_str(&[batch, cols, self.n_out]);
+
+                    ////println!("weight: {:?}, {:?}", self.weight_ptr, self.weight_grad_ptr);
+                }
+                else
+                {
+                    // weights are not trainable and layer is used just for matrix dot product
+                    let (weight_traverse_ptr, grad_weight_traverse_ptr, 
+                        backward_count_weight_prev) = 
+                        get_traverse_str_ptr(&str_ptr_weight);
+                    
+                    self.backward_count_weight_prev = backward_count_weight_prev;
+                    self.weight_ptr = ptr_to_string(weight_traverse_ptr);
+                    self.weight_grad_ptr = ptr_to_string(grad_weight_traverse_ptr);
+
+                    ////println!("weight: {:?}, {:?}", self.weight_ptr, self.weight_grad_ptr);
+                }
+                self.weight_ptr_allocated = true;
+
+                init_layer_connections(
+                    &mut self.backward_count, &str_ptr_in, 
+                    &mut self.backward_count_in_prev, &mut self.input_ptr, 
+                    &mut self.input_grad_ptr, &mut self.output_ptr, 
+                    &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
+                    &[batch, rows, self.n_out]
+                );
+            }
+        }
+
+        // convert strings to pointers
+        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
+        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
+        let output_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
+        let bias_ptr: *mut f32 = string_to_ptr(&self.biases_ptr);
+
+        // data does not need to be copied as result ptr from previous layer
+        // is set as the input
+
+        // copy data to the input pointer, prevent reallocation
+        //copy_cuda_to_cuda(
+        //    input_ptr, 
+        //    input.get_ptr(), 
+        //    &[batch, rows, cols]
+        //);
+
+        // parallel perform matrix multiplication
+        // and sum with bias tensor
+        // result pointer updated
+        //let start: Instant = Instant::now();
+        //if self.use_tiled || !self.use_tiled
+        //{
+        ////println!("output: {:?}", cuda_ptr_to_array(output_ptr, &[batch, rows, self.n_out]));
+        matmul_add_bias_tiled(
+            input_ptr, batch as u32, rows as u32, cols as u32, 
+            weight_ptr, batch as u32, cols as u32, self.n_out as u32,
+            output_ptr, bias_ptr, self.use_bias, self.zero_output
+        );
+
+        set_zero_counter(&self.backward_count);
+
+        //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
+        //println!("weight: {:?}", cuda_ptr_to_array(weight_ptr, &[batch, cols, self.n_out]));
+        //println!("output: {:?}\n", cuda_ptr_to_array(output_ptr, &[batch, rows, self.n_out]));
+
+        return self.output_traverse_ptr.clone();
+        //}
+        //else
+        //{
+        //    matmul_add_bias(
+        //        input_ptr, batch as u32, rows as u32, cols as u32, 
+        //        weight_ptr, batch as u32, cols as u32, self.n_out as u32,
+        //        output_ptr, bias_ptr
+        //    );
+        //}
+        //let end = start.elapsed();
+        ////println!("dense: {:.6}", end.as_secs_f64());
+
+        ////println!("-----------------------------");
+        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
+        // current pointer is already recorded by previous layer, don't free
+        //input.set_ptr(output_ptr, vec![batch, rows, self.n_out]);
+
+        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
+        ////println!("-----------------------------");
+        //exit(1);
+        // previous pointer will be recorded in previous layer
+
+    }
+
+    pub fn backward(&mut self)
+    {
+        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
+        //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
+        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
+        //let weight_t_ptr: *mut f32 = string_to_ptr(&self.weight_t_ptr);
+        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
+        let output_grad_ptr: *mut f32 = string_to_ptr(&self.output_grad_ptr);
+        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
+        let bias_grad_ptr: *mut f32 = string_to_ptr(&self.bias_gradients_ptr);
+        //let output_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get_mut("output").unwrap());
+        //let original_grads: *mut f32 = ptr.get_ptr();
+
+        ////println!("=========================================================");
+        ////println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
+        ////println!("\nweights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
+        ////println!("\nmatmul result: {:?}", cuda_ptr_to_array(output_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
+
+        //let start: Instant = Instant::now();
+        ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
+        if counter_is_zero(&self.backward_count_in_prev)
+        {
+            self.zero_input_grad = true;
+        }
+        
+        ////println!("{:?}", self.backward_count_weight_prev);
+        if counter_is_zero(&self.backward_count_weight_prev)
+        {
+            self.zero_weight_grad = true;
+        }
+        
+        matmul_add_bias_back(
+            input_grad_ptr, self.in_shape.0 as u32, self.in_shape.1 as u32, self.in_shape.2 as u32, 
+            weight_grad_ptr, self.in_shape.0 as u32, self.in_shape.2 as u32, self.out_shape.2 as u32, 
+            bias_grad_ptr, self.out_shape.0 as u32, self.out_shape.1 as u32, self.out_shape.2 as u32,
+            output_grad_ptr, 
+            input_ptr,
+            weight_ptr,
+            self.use_bias,
+            self.zero_input_grad,
+            self.zero_weight_grad
+        );
+
+        increment_counter(&self.backward_count);
+
+        self.batch_size += 1.0;
+
+        //let end = start.elapsed();
+        ////println!("backward: {:.6}", end.as_secs_f64());
+
+        ////println!("\noriginal_grads: {:?}", cuda_ptr_to_array(output_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
+        //ptr.set_ptr(input_grad_ptr, vec![self.in_shape.0, self.in_shape.1, self.in_shape.2]);
+        ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
+        ////println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
+        ////println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
+        ////println!("=========================================================");
+        //exit(1);      
+        // calculate summed respect to bias
+        // calculate bias gradients
+
+        /**/
+        // calculate summed respect to bias
+        // calculate bias gradients
+        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
+
+        /*
+        // reshape
+        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
+        shape.insert(shape.len() - 1, self.in_shape.1);
+        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
+        
+        // calculate update gradients for weights (multiply with the reshaped inputs)
+
+        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
+        //self.weight_gradients += &weight_grads;
+
+        // calculate update gradients for input (multiply with weights)
+        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
+        */
+    }
+
+    //pub fn get_weight_grads_ptr(&mut self) -> String
+    //{
+    //    return self.weight_gradients_ptr.clone();
+    //}
+
+    pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32, only_bias: bool)
+    {   
+        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
+        let bias_ptr: *mut f32 = string_to_ptr(&self.biases_ptr);
+        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
+        let bias_grad_ptr: *mut f32 = string_to_ptr(&self.bias_gradients_ptr);
+        let weight_velocity_ptr: *mut f32 = string_to_ptr(&self.weight_velocity_ptr);
+        let bias_velocity_ptr: *mut f32 = string_to_ptr(&self.bias_velocity_ptr);
+        let weight_momentum_ptr: *mut f32 = string_to_ptr(&self.weight_momentum_ptr);
+        let bias_momentum_ptr: *mut f32 = string_to_ptr(&self.bias_momentum_ptr);
+
+        //scalar_op_3d_inplace(weight_grad_ptr, self.lr, 2, self.in_shape.0, self.in_shape.2, self.out_shape.2);
+        //scalar_op_3d_inplace(bias_grad_ptr, self.lr, 2, self.out_shape.0, self.out_shape.1, self.out_shape.2);
+        //element_op_3d_inplace(weight_ptr, weight_grad_ptr, 1, self.in_shape.0, self.in_shape.2, self.out_shape.2);
+        //element_op_3d_inplace(bias_ptr, bias_grad_ptr, 1, self.out_shape.0, self.out_shape.1, self.out_shape.2);
+        ////println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
+        gradient_desc_3d(
+            lr, l2,
+            weight_ptr, weight_grad_ptr, weight_velocity_ptr, weight_momentum_ptr,
+            self.in_shape.0, self.in_shape.2, self.out_shape.2,
+            bias_ptr, bias_grad_ptr, bias_velocity_ptr, bias_momentum_ptr,
+            self.out_shape.0, self.out_shape.1, self.out_shape.2,
+            only_bias, false, self.batch_size, optimizer_type, alpha, beta
+        );
+
+        self.batch_size = 0.0;
+
+        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
+        //self.biases -= &(self.lr * &self.bias_gradients);
+    }
+
+    pub fn zero_io(&mut self, io_ptr_name: &String)
+    {
+        //let io_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get(io_ptr_name).unwrap());
+
+        if io_ptr_name.contains("input")
+        {
+            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.1, self.in_shape.2);
+            self.zero_input_grad = true;
+        }
+        
+        if io_ptr_name.contains("output")
+        {
+            //zeroes_3d_inplace(io_ptr, self.out_shape.0, self.out_shape.1, self.out_shape.2);
+            self.zero_output = true;
+        }
+        
+        if io_ptr_name.contains("weight")
+        {
+            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.2, self.out_shape.2);
+            self.zero_weight_grad = true;
+        }
+    }
+
+    pub fn details(&self)
+    {
+        println!("Layer type: DENSE | Layer name: {:?}", self.name);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
+        println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.weight_ptr, self.weight_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
+        println!("Input shape: {:?}", self.in_shape);
+        println!("Output shape: {:?}", self.out_shape);
+        println!("Weights: \n{:?}", self.weights);
+        if self.use_bias
+        {
+            println!("Biases: \n{:?}", self.biases);
+        }
+    }
+
+    pub fn get_param_count(&self) -> usize
+    {
+        let mut count: usize = 0;
+        if self.use_bias
+        {
+            count += self.out_shape.0 * self.out_shape.1 * self.out_shape.2;
+        }
+
+        count += self.in_shape.0 * self.in_shape.2 * self.out_shape.2;
+
+        return count
+    }
+
+    pub fn move_ptrs_to_arrays(&mut self, bias_only: bool)
+    {
+        if !bias_only
+        {
+            self.weights = cuda_ptr_to_array(string_to_ptr(&self.weight_ptr), &[self.in_shape.0, self.in_shape.2, self.out_shape.2]);
+        }
+        else
+        {
+            self.weights = ArrayD::zeros(IxDyn(&[0]));
+            self.weight_array_allocated = false;
+        }
+
+        if self.use_bias
+        {
+            self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), 
+                &[self.out_shape.0, self.out_shape.1, self.out_shape.2]);
+        }
+        else
+        {
+            self.bias_array_allocated = false;
+        }
+
+        /*
+        free_cuda_array(string_to_ptr(&self.output_traverse_ptr));
+
+        free_cuda_array(string_to_ptr(&self.biases_ptr));
+        free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
+        free_cuda_array(string_to_ptr(&self.bias_velocity_ptr));
+        free_cuda_array(string_to_ptr(&self.bias_momentum_ptr));
+        free_cuda_array(string_to_ptr(&self.weight_ptr));
+        free_cuda_array(string_to_ptr(&self.weight_grad_ptr));
+        free_cuda_array(string_to_ptr(&self.weight_velocity_ptr));
+        free_cuda_array(string_to_ptr(&self.weight_momentum_ptr));
+        free_cuda_array(string_to_ptr(&self.output_ptr));
+        free_cuda_array(string_to_ptr(&self.output_grad_ptr));
+
+        free_cuda_array(string_to_ptr(&self.input_ptr));
+        free_cuda_array(string_to_ptr(&self.input_grad_ptr));
+
+        free_cuda_array(string_to_ptr(&self.backward_count));
+        free_cuda_array(string_to_ptr(&self.backward_count_weight_prev));
+        free_cuda_array(string_to_ptr(&self.backward_count_in_prev));
+        */
+
+        self.weight_ptr_allocated = false;
+        self.bias_ptr_allocated = false;
+    }
+
+    pub fn set_ptrs_allocated(&mut self)
+    {
+        self.weight_ptr_allocated = true;
+        self.bias_ptr_allocated = true;
+    }
+}

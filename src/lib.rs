@@ -1,14 +1,695 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+#![allow(dead_code)]
+#![allow(non_camel_case_types)]
+
+use std::{ffi::{c_char, CStr}, os::raw::c_void, process::exit};
+
+use io_functions::{load_model, save_model};
+use layers::{activation::Activation, activation_cuda::ActivationCuda, adaptive::{AdaptiveReLU, AdaptiveSwish, AdaptiveTanh}, attention::SelfAttention, broadcast_cuda::BroadcastCuda, cls_cuda::CLSCuda, conv2d::Conv2d, conv2d_cuda::Conv2dCuda, cuda_layer_enum::CudaLayer, dense::Dense, dense_cuda::DenseCuda, dropout::Dropout, dropout_cuda::DropoutCuda, elementwise_cuda::ElementwiseCuda, embedding_cuda::Embedding2DCuda, flatten::Flatten, l2norm_cuda::L2NormCuda, layer_enum::Layer, layer_norm::NormLayer, recurrent::RecurrentDense, reward_layer::RewardLayer, softmax::Softmax, softmax_cuda::SoftmaxCuda, sum_cuda::SumCuda, temporal_dense::TemporalDense, transpose_cuda::BatchTransposeCuda};
+    
+use math_functions::{get_loss_deriv_from_str, get_loss_from_str};
+use ndarray::{ArrayD, IxDyn};
+use neuralnet::NeuralNet;
+use pointer_ops::{char_ptr_to_string, string_to_char_ptr};
+use storage::{ae_buf::AutoencoderBuf, storage_seq_buf::ReplayBuf};
+use types::{LossFn, LossFnDeriv};
+
+mod neuralnet;
+mod math_functions;
+mod types;
+mod batch;
+mod shaping;
+mod io_functions;
+mod layers;
+mod storage;
+mod random_name_gen;
+mod heap_dict;
+mod parallel;
+mod cuda_bridge;
+mod pointer_ops;
+
+#[no_mangle]
+pub unsafe extern "C" fn create_model(use_cuda: bool) -> *mut c_void
+{
+    std::env::set_var("RUST_BACKTRACE", "full");
+    let nn_model: NeuralNet = NeuralNet::new(use_cuda);
+    return Box::into_raw(Box::new(nn_model)) as *mut c_void;
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// ADD LAYERS
+#[no_mangle]
+pub unsafe extern "C" fn add_dense_layer(
+    vp: *mut c_void, n_out: usize, l2: f32, lr: f32
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(Layer::DENSE(Dense::new(n_out, l2, lr)));
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+#[no_mangle]
+pub unsafe extern "C" fn add_activation(
+    vp: *mut c_void, activation: *mut c_char, lr: f32
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let activation_str: &str = CStr::from_ptr(activation).to_str().unwrap();
+    
+    if activation_str == "softmax"
+    {
+        (*nn).add_layer(Layer::SOFTMAX(Softmax::new()));
     }
+    else if activation_str == "relu"
+    {
+        (*nn).add_layer(Layer::ADAPTIVE_RELU(AdaptiveReLU::new()));
+    }
+    else if activation_str != "none"
+    {
+        (*nn).add_layer(Layer::ACTIVATION(Activation::new(activation_str, lr)));
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_adaptive_activation(
+    vp: *mut c_void, activation: *mut c_char, amplification: f32
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let activation_str: &str = CStr::from_ptr(activation).to_str().unwrap();
+
+    if activation_str == "adaptive_tanh"
+    {
+        (*nn).add_layer(Layer::ADAPTIVE_TANH(AdaptiveTanh::new(amplification)));
+    }
+    else if activation_str == "adaptive_swish"
+    {
+        (*nn).add_layer(Layer::ADAPTIVE_SWISH(AdaptiveSwish::new()));
+    }
+    else if activation_str == "adaptive_relu"
+    {
+        (*nn).add_layer(Layer::ADAPTIVE_RELU(AdaptiveReLU::new()));
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_dropout_layer(vp: *mut c_void, rate: f32)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(Layer::DROPOUT(Dropout::new(rate)));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_norm_layer(vp: *mut c_void, lr: f32, axis: usize)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(Layer::LAYER_NORM(NormLayer::new(lr, axis)));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_reward_layer(vp: *mut c_void, lowest_score: f32, highest_score: f32)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(
+        Layer::REWARD_LAYER(
+            RewardLayer::new(
+                lowest_score, highest_score
+            )
+        )
+    );
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_conv2d_layer(
+    vp: *mut c_void, 
+    in_channels: usize, out_channels: usize, 
+    filter_dim: usize, stride_len: usize, l2: f32
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(Layer::CONV2D(
+        Conv2d::new(
+            in_channels, out_channels, 
+            filter_dim, stride_len, l2
+        )
+    ));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_flatten_layer(
+    vp: *mut c_void
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(Layer::FLATTEN(Flatten::new()));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_recurrent_dense_layer(
+    vp: *mut c_void, hidden_state_len: usize, middle_len: usize, 
+    return_sequence: bool, lr: f32)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(
+        Layer::RECURRENT(
+            RecurrentDense::new(
+                hidden_state_len, middle_len, return_sequence,lr
+            )
+        )
+    );
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_temporal_dense_layer(
+    vp: *mut c_void, 
+    sub_chain_n_layers: usize, sub_chain_layer_len: usize,
+    hidden_state_len: usize,
+    activation: *mut c_char,
+    hidden_state_activation: *mut c_char, 
+    return_sequence: bool,
+    lr: f32
+)
+{
+    let activation: &str = CStr::from_ptr(activation).to_str().unwrap();
+    let hidden_state_activation: &str = CStr::from_ptr(hidden_state_activation).to_str().unwrap();
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    //println!("a");
+    (*nn).add_layer(
+        Layer::TEMPORAL_DENSE(
+            TemporalDense::new(
+                sub_chain_n_layers, sub_chain_layer_len, 
+                hidden_state_len, 
+                activation, 
+                hidden_state_activation, 
+                return_sequence,
+                lr
+            )
+        )
+    );
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_attention_layer(
+    vp: *mut c_void, attention_heads: usize, 
+    input_embedding_len: usize, output_embedding_len: usize, seq_len: usize,
+    attention_mode: *mut c_char, 
+    return_sequence: bool, l2: f32, lr: f32
+)
+{
+    let attention_mode: &str = CStr::from_ptr(attention_mode).to_str().unwrap();
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).add_layer(
+        Layer::SELF_ATTENTION(
+            SelfAttention::new(
+                attention_heads, input_embedding_len,
+                output_embedding_len, seq_len, attention_mode, 
+                return_sequence, l2, lr
+            )
+        )
+    );
+}
+
+/////////////////////////////////////////////////////////////////////
+// CUDA layers
+#[no_mangle]
+pub unsafe extern "C" fn add_dense_cuda_layer(
+    vp: *mut c_void, n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: &str = CStr::from_ptr(id).to_str().unwrap();
+    (*nn).add_cuda_layer(
+        name.to_string(), 
+        CudaLayer::DENSE_CUDA(DenseCuda::new(
+            n_in, n_out, batch, rows, use_bias, name
+        )
+    ));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_activation_cuda_layer(
+    vp: *mut c_void, batch: usize, rows: usize, cols: usize, activation: *mut c_char, scale: f32, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let id: &str = CStr::from_ptr(id).to_str().unwrap();
+    let activation_str: &str = CStr::from_ptr(activation).to_str().unwrap();
+    (*nn).add_cuda_layer(
+        id.to_string(), 
+        CudaLayer::ACTIVATION_CUDA(ActivationCuda::new(activation_str, batch, rows, cols, scale))
+    );
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_l2norm_cuda_layer(
+    vp: *mut c_void, batch: usize, rows: usize, cols: usize, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(
+        name,
+        CudaLayer::L2_NORM_CUDA(
+            L2NormCuda::new(batch, rows, cols)
+        )
+    );
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_embedding_2d_cuda_layer(
+    vp: *mut c_void, vocab_size: usize, embedding_len: usize, seq_len: usize, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(name, CudaLayer::EMBEDDING_2D_CUDA(
+        Embedding2DCuda::new(
+            vocab_size, embedding_len, seq_len
+        )
+    ));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_conv2d_cuda_layer(
+    vp: *mut c_void, n_filters: usize, filter_dim: usize, strides: usize, 
+    batch: usize, rows: usize, cols: usize, flatten: bool, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(
+        name,
+        CudaLayer::CONV_2D_CUDA(
+            Conv2dCuda::new(
+                n_filters, filter_dim, strides, batch, rows, cols,
+                flatten, "conv2d"
+            )
+        )
+    );
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_softmax_cuda_layer(
+    vp: *mut c_void, batch: usize, rows: usize, cols: usize, temperature: f32, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(name, CudaLayer::SOFTMAX_CUDA(SoftmaxCuda::new(batch, rows, cols, temperature)));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_dropout_cuda_layer(
+    vp: *mut c_void, batch: usize, rows: usize, cols: usize, dropout_rate: f32, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(name, CudaLayer::DROPOUT_CUDA(DropoutCuda::new(batch, rows, cols, dropout_rate, "dropout")));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_elementwise_cuda_layer(
+    vp: *mut c_void, batch: usize, rows: usize, cols: usize, scale_range: f32, 
+    op: u32, dropout_rate: f32, id: *mut c_char, activation_str: *mut c_char, act_scale: f32
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    let activation_str: &str = CStr::from_ptr(activation_str).to_str().unwrap();
+
+    let func_id: i32;
+    match activation_str
+    {
+        "sigmoid" => func_id = 0,
+        "tanh" => func_id = 1,
+        "silu" => func_id = 2,
+        "gelu" => func_id = 3,
+        "tanh2" => func_id = 4,
+        "softplus" => func_id = 5,
+        "linear" => func_id = 6,
+        _ => {println!("Invalid activation {:?}", activation_str); exit(1)},
+    };
+
+    (*nn).add_cuda_layer(name, CudaLayer::ELEMENTWISE_CUDA(
+        ElementwiseCuda::new(
+            batch, rows, cols, scale_range,
+            op, dropout_rate, func_id, act_scale
+        )
+    ));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_broadcast_cuda_layer(
+    vp: *mut c_void, out_batch: usize, out_rows: usize, out_cols: usize,
+    axis: i32, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(name, CudaLayer::BROADCAST_CUDA(BroadcastCuda::new(out_batch, out_rows, out_cols, axis)));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_sum_cuda_layer(
+    vp: *mut c_void, in_batch: usize, in_rows: usize, in_cols: usize,
+    axis: i32, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(name, CudaLayer::SUM_CUDA(SumCuda::new(in_batch, in_rows, in_cols, axis)));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_transpose_cuda_layer(
+    vp: *mut c_void, batch: usize, rows: usize, cols: usize, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(name, CudaLayer::TRANSPOSE_CUDA(BatchTransposeCuda::new(batch, rows, cols)));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_cls_cuda_layer(
+    vp: *mut c_void, batch: usize, rows: usize, cols: usize, token_idx: usize, id: *mut c_char
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
+    (*nn).add_cuda_layer(name, CudaLayer::CLS_CUDA(CLSCuda::new(batch, rows, cols, token_idx)));
+}
+
+/////////////////////////////////////////////////////////////////////
+#[no_mangle]
+pub unsafe extern "C" fn pass_to_input(
+    vp: *mut c_void, name: *mut c_char, array_ptr: *mut f32, array_len: usize
+) -> *mut c_char
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(name).to_str().unwrap().to_string();
+    let traverse_ptr_str: String = (*nn).pass_to_input(name, array_ptr, array_len);
+    //println!("{:?}", traverse_ptr_str);
+    return string_to_char_ptr(&traverse_ptr_str);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn pass_to_output(
+    vp: *mut c_void, name: *mut c_char, traverse_ptr: *mut c_char, array_len: usize
+) -> *mut f32
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(name).to_str().unwrap().to_string();
+    let array_output: *mut f32 = (*nn).pass_to_output(name, traverse_ptr, array_len);
+    return array_output;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ce_loss(
+    vp: *mut c_void, output_name: *mut c_char, target_classes: *mut f32,
+    batch: usize, rows: usize, cols: usize
+) -> *mut f32
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let output_name: String = CStr::from_ptr(output_name).to_str().unwrap().to_string();
+    let loss_vals: *mut f32 = (*nn).ce_loss_fn(output_name, target_classes, batch, rows, cols);
+
+    return loss_vals;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn pass_to_output_grad(
+    vp: *mut c_void, name: *mut c_char, array_ptr: *mut f32, array_len: usize
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: String = CStr::from_ptr(name).to_str().unwrap().to_string();
+    (*nn).pass_to_output_grad(name, array_ptr, array_len);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn forward(
+    vp: *mut c_void, layer_id: *mut c_char, str_ptr_in: *mut c_char, str_ptr_weight_p: *mut c_char
+) -> *mut c_char
+{   
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let layer_id: String = CStr::from_ptr(layer_id).to_str().unwrap().to_string();
+    let str_ptr_in: String = char_ptr_to_string(str_ptr_in);
+    let str_ptr_weight_temp: String = CStr::from_ptr(str_ptr_weight_p).to_str().unwrap().to_string();
+    let str_ptr_weight: String;
+    if str_ptr_weight_temp != "none"
+    {
+        str_ptr_weight = char_ptr_to_string(str_ptr_weight_p);
+    }
+    else
+    {
+        str_ptr_weight = str_ptr_weight_temp;
+    }
+
+    let traverse_ptr: String = (*nn).forward(layer_id, str_ptr_in, str_ptr_weight);
+    return string_to_char_ptr(&traverse_ptr);
+}
+
+// assuming output is always 1 dimensional
+#[no_mangle]
+pub unsafe extern "C" fn backward(
+    vp: *mut c_void
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).backward();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn update_params(
+    vp: *mut c_void, layer_id: *mut c_char, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let name: &str = CStr::from_ptr(layer_id).to_str().unwrap();
+    (*nn).update_params(name, optimizer_type, lr, l2, alpha, beta);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn set_dropout(
+    vp: *mut c_void, use_dropout: bool
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).set_dropout(use_dropout)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn update_loss_queue(
+    vp: *mut c_void, loss: f32, maxlen: usize
+)
+{
+    let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    (*nn).update_loss_queue(loss, maxlen);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn free_array(array_ptr: *mut f32, len: usize)
+{
+    let output_vec: Vec<f32> = Vec::from_raw_parts(array_ptr, len, len);
+    std::mem::drop(output_vec);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn free_nn(ptr: *mut c_void)
+{
+    let nn: *mut NeuralNet = ptr as *mut NeuralNet;
+    let nn_boxed: Box<NeuralNet> = Box::from_raw(nn);
+    std::mem::drop(nn_boxed);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn loss(
+    loss_fn: *mut c_char, array1: *mut f32, array2: *mut f32, flattened_len: usize) -> f32
+{
+    let loss_fn_str: &str = CStr::from_ptr(loss_fn).to_str().unwrap();
+
+    let loss_function: LossFn = get_loss_from_str(loss_fn_str).unwrap();
+
+    let vec1_flattened: Vec<f32> = std::slice::from_raw_parts_mut(array1, flattened_len).to_vec();
+    let vec2_flattened: Vec<f32> = std::slice::from_raw_parts_mut(array2, flattened_len).to_vec();
+
+    let array1: ArrayD<f32> = ArrayD::from_shape_vec(IxDyn(&[flattened_len]), vec1_flattened).unwrap();
+    let array2: ArrayD<f32> = ArrayD::from_shape_vec(IxDyn(&[flattened_len]), vec2_flattened).unwrap();
+
+    let loss_value: f32 = loss_function(array1, array2);
+
+    return loss_value;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn loss_grads(
+    loss_fn: *mut c_char, array1: *mut f32, array2: *mut f32, flattened_len: usize) -> *mut f32
+{
+    let loss_fn_str: &str = CStr::from_ptr(loss_fn).to_str().unwrap();
+
+    let loss_func_deriv: LossFnDeriv = get_loss_deriv_from_str(loss_fn_str).unwrap();
+
+    //let output_shape: Vec<usize> = std::slice::from_raw_parts_mut(array_shape, array_shape_len).to_vec();
+    let vec1_flattened: Vec<f32> = std::slice::from_raw_parts_mut(array1, flattened_len).to_vec();
+    let vec2_flattened: Vec<f32> = std::slice::from_raw_parts_mut(array2, flattened_len).to_vec();
+
+    let array1: ArrayD<f32> = ArrayD::from_shape_vec(IxDyn(&[flattened_len]), vec1_flattened).unwrap();
+    let array2: ArrayD<f32> = ArrayD::from_shape_vec(IxDyn(&[flattened_len]), vec2_flattened).unwrap();
+
+    let grads: ArrayD<f32> = loss_func_deriv(array1, array2);
+
+    let mut grads_vec: Vec<f32> = grads.into_raw_vec();
+
+    let grads_vec_ptr: *mut f32 = grads_vec.as_mut_ptr();
+
+    std::mem::forget(grads_vec);
+    return grads_vec_ptr;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn details(ptr: *mut c_void)
+{
+    let nn: *mut NeuralNet = ptr as *mut NeuralNet;
+    (*nn).details();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn save(ptr: *mut c_void, path: *mut c_char, checkpoint: bool)
+{
+    let nn: *mut NeuralNet = ptr as *mut NeuralNet;
+    let path: &str = CStr::from_ptr(path).to_str().unwrap();
+    save_model(path, &mut *nn, checkpoint);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn load(path: *mut c_char) -> *mut c_void
+{
+    std::env::set_var("RUST_BACKTRACE", "full");
+    let path: &str = CStr::from_ptr(path).to_str().unwrap();
+    let nn_struct: NeuralNet = load_model(path);
+
+    let nn: *mut NeuralNet = Box::into_raw(Box::new(nn_struct));
+
+    return nn as *mut c_void
+}
+
+//////////////////////////////////////////////////////////////////
+// for storage buffer
+
+#[no_mangle]
+pub unsafe extern "C" fn create_replay_buf(max_buffer_len: u64, max_online_queue_len: u64) -> *mut c_void
+{
+    let seq_buf: ReplayBuf = ReplayBuf::new(
+        max_buffer_len as usize, max_online_queue_len as usize
+    );
+    return Box::into_raw(Box::new(seq_buf)) as *mut c_void;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_state(
+    seq_buf_v: *mut c_void,
+    input: *mut f32, input_len: usize, 
+    input_shape: *mut usize, input_shape_len: usize,
+    output: *mut f32, output_len: usize, 
+    output_shape: *mut usize, output_shape_len: usize,
+    reward: f32, choice_type: f32
+)
+{
+    let seq_buf: *mut ReplayBuf = seq_buf_v as *mut ReplayBuf;
+
+    // convert the input pointer into a ndarray type
+    let input_vec: Vec<f32> = std::slice::from_raw_parts_mut(input, input_len).to_vec();
+    let input_shape_vec: &mut [usize] = std::slice::from_raw_parts_mut(input_shape, input_shape_len);
+    let input_array: ArrayD<f32> = 
+        ArrayD::from_shape_vec(IxDyn(input_shape_vec), input_vec).unwrap();
+    
+    // convert the output pointer into a ndarray type
+    let output_vec: Vec<f32> = std::slice::from_raw_parts_mut(output, output_len).to_vec();
+    let output_shape_vec: &mut [usize] = std::slice::from_raw_parts_mut(output_shape, output_shape_len);
+    let output_array: ArrayD<f32> = 
+        ArrayD::from_shape_vec(IxDyn(output_shape_vec), output_vec).unwrap();
+    
+    // pass input, corresponding output and reward to online buffer
+    (*seq_buf).add_state(input_array, output_array, reward, choice_type);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_state_input_at(seq_buf_v: *mut c_void, idx: usize) -> *mut f32
+{
+    let seq_buf: *mut ReplayBuf = seq_buf_v as *mut ReplayBuf;
+
+    let array: ArrayD<f32> = (*seq_buf).get_state_input_at(idx);
+    let mut array1d: Vec<f32> = array.into_raw_vec();
+    let array_1d_ptr: *mut f32 = array1d.as_mut_ptr();
+
+    std::mem::forget(array1d);
+
+    return array_1d_ptr;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_state_output_at(seq_buf_v: *mut c_void, idx: usize) -> *mut f32
+{
+    let seq_buf: *mut ReplayBuf = seq_buf_v as *mut ReplayBuf;
+
+    let array: ArrayD<f32> = (*seq_buf).get_state_output_at(idx);
+    let mut array1d: Vec<f32> = array.into_raw_vec();
+    let array_1d_ptr: *mut f32 = array1d.as_mut_ptr();
+    
+    std::mem::forget(array1d);
+
+    return array_1d_ptr;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn reset_online_queue(seq_buf_v: *mut c_void)
+{
+    let seq_buf: *mut ReplayBuf = seq_buf_v as *mut ReplayBuf;
+    (*seq_buf).reset_online_queue();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_ave_rating(seq_buf_v: *mut c_void) -> f32
+{
+    let seq_buf: *mut ReplayBuf = seq_buf_v as *mut ReplayBuf;
+    let ave: f32 = (*seq_buf).get_ave_rating();
+    return ave;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_count(seq_buf_v: *mut c_void) -> usize
+{
+    let seq_buf: *mut ReplayBuf = seq_buf_v as *mut ReplayBuf;
+    let count: usize = (*seq_buf).get_count();
+    return count;
+}
+
+//////////////////////////////////////////////////////////////////
+// for ae buffer
+
+#[no_mangle]
+pub unsafe extern "C" fn create_ae_buf(max_len: u64, encoder_vp: *mut c_void, decoder_vp: *mut c_void) -> *mut c_void
+{
+    let encoder_ptr: *mut NeuralNet = encoder_vp as *mut NeuralNet;
+    let decoder_ptr: *mut NeuralNet = decoder_vp as *mut NeuralNet;
+    let ae_buf: AutoencoderBuf = AutoencoderBuf::new(
+        max_len as usize, encoder_ptr, decoder_ptr
+    );
+    return Box::into_raw(Box::new(ae_buf)) as *mut c_void;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn add_to_autoencoder_buf(
+    ae_buf_v: *mut c_void,
+    input: *mut f32, input_len: usize, input_shape: *mut usize, input_shape_len: usize)
+{
+    let ae_buf: *mut AutoencoderBuf = ae_buf_v as *mut AutoencoderBuf;
+
+    // convert the input pointer into a ndarray type
+    let input_vec: Vec<f32> = std::slice::from_raw_parts_mut(input, input_len).to_vec();
+    let input_shape_vec: &mut [usize] = std::slice::from_raw_parts_mut(input_shape, input_shape_len);
+    let input_array: ArrayD<f32> = 
+        ArrayD::from_shape_vec(IxDyn(input_shape_vec), input_vec).unwrap();
+    
+    // pass input, corresponding output and reward to online buffer
+    (*ae_buf).add_new_array(input_array);
 }

@@ -1,0 +1,618 @@
+
+use std::{collections::{HashMap, VecDeque}, fs::{File, OpenOptions}, io::Read};
+
+use memmap2::MmapMut;
+use ndarray::ArrayD;
+use rand::Rng;
+use serde::Serialize;
+
+use crate::{heap_dict::{heap_dict::HeapDict, heap_node::HeapNode}, random_name_gen::gen_random_name}; 
+use super::storage_seq::DataSeq;
+use half::f16;
+
+#[derive(Debug)]
+pub struct MemoryMap
+{
+    mmap: Option<MmapMut>,
+    byte_len: usize,
+    mmap_file_path: String
+}
+impl MemoryMap
+{
+    pub fn new(initial_bytes: Vec<u8>) -> Self
+    {
+        let random_path: String = "memory".to_string() + "/" + gen_random_name(15).as_str();
+        let file: File = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(random_path.clone()).unwrap();
+        
+        file.set_len(100000 as u64).unwrap();
+        let mut mmap: MmapMut = unsafe { 
+            MmapMut::map_mut(&file).unwrap() 
+        };
+
+        let byte_len: usize = initial_bytes.len();
+        mmap[0..byte_len].copy_from_slice(&initial_bytes);
+        mmap.flush().unwrap();
+
+        return Self
+        {
+            mmap: Some(mmap),
+            byte_len,
+            mmap_file_path: random_path
+        };
+    }
+
+    pub fn write_bytes(&mut self, bytes: Vec<u8>)
+    {
+        let new_byte_len: usize = bytes.len();
+        if new_byte_len > self.byte_len
+        {
+            self.clear_mmap();
+            // remap file with more bytes
+            let file: File = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .read(true)
+                .open(self.mmap_file_path.clone()).unwrap();
+        
+            file.set_len(new_byte_len as u64).unwrap();
+
+            // reassign mmap
+            self.mmap = unsafe {
+                Some(MmapMut::map_mut(&file).unwrap())
+            };
+        }
+
+        self.byte_len = new_byte_len;
+        let mmap: &mut MmapMut = self.mmap.as_mut().unwrap();
+        mmap[0..self.byte_len].copy_from_slice(&bytes);
+        mmap.flush().unwrap();
+
+    }
+
+    pub fn clear_mmap(&mut self)
+    {
+        self.mmap = None;
+    }
+
+    pub fn read_bytes(&self) -> &[u8]
+    {
+        return &self.mmap.as_ref().unwrap()[0..self.byte_len];
+    }
+}
+
+pub struct MemoryBuf
+{
+    // constantly appending/popping inputs/outputs
+    online_count: u128,
+    online_input_seq: VecDeque<ArrayD<u16>>,
+    online_output_seq: VecDeque<ArrayD<u16>>,
+    online_reward_seq: VecDeque<f32>,
+    online_choice_type: VecDeque<f32>, // 0 = from pred, 1 = random action
+    online_ae_loss_seq: VecDeque<f32>,
+    online_reward_sum: f32,
+    online_choice_sum: f32, // plus one if action was not desired action
+
+
+    //seq_maps: Vec<MmapMut>,
+    //seqs: Vec<Vec<u8>>,
+    //ratings: Vec<f32>,
+    seq_heap_dict: HeapDict<f32, Vec<u8>>,
+    seq_in_use: DataSeq,
+    seq_byte_lens: Vec<usize>,
+    // to be used for random selection on heap array
+    // weights based on heap level
+    //cumul_level_weights: Vec<f32>,
+    //idx_level_cat: Vec<Vec<usize>>,
+
+    //max_storage_len: usize,
+    max_seq_len: usize,
+    max_storage_len: usize,
+    current_idx: i32,
+    ascend: bool,
+}
+
+impl MemoryBuf
+{
+    pub fn new(max_storage_len: usize, max_seq_len: usize) -> Self
+    {
+        let seq_storage: MemoryBuf = Self
+        {
+            online_count: 0,
+            online_input_seq: VecDeque::new(),
+            online_output_seq: VecDeque::new(),
+            online_reward_seq: VecDeque::new(),
+            online_choice_type: VecDeque::new(),
+            online_ae_loss_seq: VecDeque::new(),
+            online_reward_sum: 0.0,
+            online_choice_sum: 0.0,
+            
+            //seq_maps: Vec::new(),
+            //seqs: Vec::new(),
+            //ratings: Vec::new(),
+            seq_in_use: DataSeq::new(VecDeque::new(), VecDeque::new()),
+            seq_heap_dict: HeapDict::new(),
+            seq_byte_lens: Vec::new(),
+
+            max_seq_len, max_storage_len,
+            ascend: true,
+            current_idx: 0,
+        };
+
+        return seq_storage;
+    }
+
+    pub fn add_to_online_seq(&mut self, input: ArrayD<f32>, output: ArrayD<f32>, reward: f32, choice_type: f32, ae_loss: f32)
+    {   
+        // add to online sequence
+        self.online_input_seq.push_back(input.mapv(|v: f32| f16::from_f32(v).to_bits()));
+        self.online_output_seq.push_back(output.mapv(|v: f32| f16::from_f32(v).to_bits()));
+        self.online_reward_seq.push_back(reward);
+        self.online_choice_type.push_back(choice_type);
+        self.online_ae_loss_seq.push_back(ae_loss);
+        self.online_reward_sum += reward;
+        self.online_choice_sum += choice_type;
+
+        if self.online_input_seq.len() > self.max_seq_len
+        {
+            self.online_input_seq.pop_front();
+            self.online_output_seq.pop_front();
+            let reward: f32 = self.online_reward_seq.pop_front().unwrap();
+            let choice: f32 = self.online_choice_type.pop_front().unwrap();
+            self.online_ae_loss_seq.pop_front();
+
+            self.online_reward_sum -= reward;
+            self.online_choice_sum -= choice;
+        }
+
+        // prefer sequences with more random actions = more diverse buffer
+        // prefer sequences that are longer
+        //if self.seq_heap_dict.len() == 0 || 
+        //    (self.online_choice_sum >= self.online_input_seq.len() as f32 * 0.25)// &&
+             //rand::thread_rng().gen_range(0.0..1.0) < 0.1)
+        {
+            let rating: f32 = 
+                //(self.online_reward_sum / self.online_reward_seq.len() as f32) + 
+                //self.online_reward_seq.len() as f32;
+                self.online_reward_sum + self.online_reward_seq.len() as f32;
+            
+            // record copy of current online sequences and save to disk
+            //let random_name: String = gen_random_name(20);
+            let new_data_seq: DataSeq = DataSeq::new(
+                self.online_input_seq.clone(), 
+                self.online_output_seq.clone()
+            );
+
+            if self.seq_heap_dict.len() >= self.max_storage_len
+            {
+                let first_node: &mut HeapNode<f32, Vec<u8>> = self.seq_heap_dict.mut_ref_at(0);
+                let lowest_rating: f32 = first_node.key;
+                if rating >= lowest_rating
+                {
+                    //let first_ref: &mut HeapNode<f32, Vec<u8>> = self.seq_heap_dict.mut_ref_at(0);
+                    //first_node.key = rating;
+                    //first_node.data.write_bytes(serialized_seq);
+                    //self.seq_heap_dict.trickle_down();
+                    let serialized_seq: Vec<u8> = bincode::serialize(&new_data_seq).unwrap().to_vec();
+                    self.seq_heap_dict.replace_first(rating, serialized_seq);
+                }
+            }
+            else
+            {
+                let serialized_seq: Vec<u8> = bincode::serialize(&new_data_seq).unwrap().to_vec();
+                //let memory_map: MemoryMap = MemoryMap::new(serialized_seq);
+                self.seq_heap_dict.add(rating, serialized_seq);
+            }
+        }
+        /**/
+    }
+
+    //pub fn get_seq_rating_at(&mut self, idx: usize) -> f32
+    //{
+        //let memorymap: &MmapMut = self.seq_maps.get(idx).unwrap();
+        //let seq: DataSeq = read_seq_from_mem(memorymap, self.seq_byte_lens[idx]);
+
+    //    let rating: f32 = self.ratings[idx];
+        //self.ratings[idx] -= 0.1;       
+    //    return rating;
+    //}
+
+    pub fn mov_seq_idx(&mut self) -> usize
+    {
+        let current_idx: usize = self.current_idx as usize;
+        
+        if self.current_idx == 0
+        {
+            // allows new entries to be accepted while allowing
+            // current data to still be trained on
+            for node in &mut self.seq_heap_dict.heap_vec
+            {
+                //node.key = f32::NEG_INFINITY;
+            }
+        }
+
+        if self.current_idx >= self.seq_heap_dict.len() as i32 - 1
+        {
+            self.current_idx = self.seq_heap_dict.len() as i32 - 1;
+            self.ascend = false;
+        }
+        else if self.current_idx <= 0
+        {
+            self.current_idx = 0;
+            self.ascend = true;
+        }
+
+        if self.seq_heap_dict.len() > 1
+        {
+            if self.ascend
+            {
+                self.current_idx += 1;
+            }
+            else
+            {
+                self.current_idx -= 1;
+            }
+        }
+        //println!("{:?}, {:?}", self.ascend, self.current_idx);
+
+        self.current_idx = rand::thread_rng().gen_range(0..self.seq_heap_dict.len()) as i32;
+
+        return current_idx;
+    }
+
+    pub fn update_saved_seq(&mut self)
+    {
+        //let serialised_seq: &[u8] = 
+        //    self.seq_heap_dict.heap_vec[self.current_idx as usize].data.read_bytes();
+        let serialised_seq: Vec<u8> = self.seq_heap_dict.heap_vec[self.current_idx as usize].value.clone();
+
+        let seq: DataSeq = bincode::deserialize(
+            &serialised_seq
+        ).unwrap();
+
+        self.seq_in_use = seq;
+    }
+
+    pub fn get_saved_seq_len(&self) -> usize
+    {
+        return self.seq_in_use.input_seq.len();
+    }
+
+    pub fn get_saved_inputs_at(&self, inputs_idx: usize) -> ArrayD<f32>
+    {
+        //let memorymap: &MmapMut = self.seq_maps.get(seq_idx).unwrap();
+        //let seq: DataSeq = read_seq_from_mem(
+        //    memorymap, self.seq_byte_lens[seq_idx]
+        //);
+        //let serialized: &Vec<u8> = self.seqs.get(seq_idx).unwrap();
+        //let seq: &DataSeq = self.seqs.get(seq_idx).unwrap();
+        let input_array: ArrayD<u16> = 
+            self.seq_in_use.input_seq.get(inputs_idx).unwrap().clone();
+        
+        return input_array.mapv(|v: u16| f16::from_bits(v).to_f32());
+    }
+
+    pub fn get_saved_outputs_at(&self, outputs_idx: usize) -> ArrayD<f32>
+    {
+        //let memorymap: &MmapMut = self.seq_maps.get(seq_idx).unwrap();
+        //let seq: DataSeq = read_seq_from_mem(
+        //    memorymap, self.seq_byte_lens[seq_idx]
+        //);
+        //let serialized: &Vec<u8> = self.seqs.get(seq_idx).unwrap();
+        //let seq: &DataSeq = self.seqs.get(seq_idx).unwrap();
+        let output_array: ArrayD<u16> = 
+            self.seq_in_use.output_seq.get(outputs_idx).unwrap().clone();
+        
+        return output_array.mapv(|v: u16| f16::from_bits(v).to_f32());
+    }
+
+    pub fn clear_online(&mut self)
+    {  
+        self.online_input_seq.clear();
+        self.online_output_seq.clear();
+        self.online_reward_seq.clear();
+        self.online_choice_type.clear();
+        self.online_count = 0;
+        self.online_reward_sum = 0.0;
+        self.online_choice_sum = 0.0;
+    }
+
+    pub fn get_ave_rating(&mut self) -> f32
+    {
+        //let mut rating_sorted: Vec<f32> = self.ratings.clone();
+        //rating_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        //let q1_idx: usize = (rating_sorted.len() + 1) * (1 / 4);
+
+        let mut rating: f32 = 0.0;
+        for i in 0..self.seq_heap_dict.len()
+        {
+            rating += self.seq_heap_dict.heap_vec[i].key;
+        }
+
+        //return rating_sorted[q1_idx];//rating / (self.ratings.len() as f32);
+        return rating / (self.seq_heap_dict.len() as f32);
+    }
+
+    /*
+    pub fn weighted_idx_select(&self, vector: &[f32], amplifier: f32) -> (usize, bool)
+    {
+        // create ratings translated to positive range over 1.0
+        let (_, min_val, _, max_val, _) = get_vec_min_max(vector);
+        
+        //let scaled_ratings: Vec<f32> = scale_vec(&self.ratings, 1.0);
+        let mut total: f32 = 0.0;
+        let mut cumul_weights: Vec<f32> = vec![0.0];
+
+        // porportional to range between min and max weighting
+        //let c: f32 = (min_val - max_val + 1e-10).abs();
+        //let b: f32 = (c + 1.0).ln();
+        //let a: f32 = b / c;
+        for i in 0..vector.len()
+        {
+            //let normalized_diff: f32 = 
+            //    (vector[i] - max_val) / (min_val - max_val + 1e-10).abs();
+            //total += (a * (vector[i] - max_val) + b).exp().powf(amplifier);
+            /**/
+            let val: f32;
+            if min_val < 1.0
+            {
+                val = self.ratings[i] + (1.0 - min_val);
+            }
+            else
+            {
+                val = self.ratings[i];
+            }
+            /**/
+            total += val * 1.0;
+            cumul_weights.push(total);
+        }
+
+        let random_value: f32 = rand::thread_rng().gen_range(0.0..total);
+        let mut chosen_idx: usize = 0;
+
+        for i in 0..(cumul_weights.len() - 1)
+        {
+            if cumul_weights[i] <= random_value &&
+                random_value <= cumul_weights[i + 1]
+            {
+                chosen_idx = i;
+                break;
+            }
+        }
+
+        // whether to pop the data at index based on weighting
+        //let chosen_idx_weight: f32 = (a * (self.ratings[chosen_idx] - max_val) + b).exp();
+        let keep_data: bool = true;
+        
+        /*
+        if c > 1.0
+        {
+            if rand::thread_rng().gen_range(1.0..c * 2.0) > chosen_idx_weight
+            {
+                keep_data = false;
+            }
+        }
+        */
+
+        return (chosen_idx, keep_data);
+    }
+    */
+
+    pub fn get_count(&self) -> usize
+    {
+        return self.seq_heap_dict.len();
+    }
+
+}
+
+pub fn get_vec_min_max(vector: &[f32]) -> (usize, f32, usize, f32, f32)
+{
+    let mut min_val: f32 = vector[0];
+    let mut min_idx: usize = 0;
+    let mut max_val: f32 = vector[0];
+    let mut max_idx: usize = 0;
+    let mut total: f32 = vector[0];
+
+    for i in 1..vector.len()
+    {
+        if vector[i] <= min_val
+        {
+            min_val = vector[i];
+            min_idx = i;
+        }
+
+        if vector[i] >= max_val
+        {
+            max_val = vector[i];
+            max_idx = i;
+        }
+        total += vector[i];
+    }
+
+    return (min_idx, min_val, max_idx, max_val, total);
+}
+
+pub fn _scale_vec(vector: &Vec<f32>, scale: f32) -> Vec<f32>
+{   
+    let (_, min_val, _, max_val, _) = get_vec_min_max(vector);
+    let mut scaled_vector: Vec<f32> = Vec::new();
+    let mut max_abs: f32 = 0.0;
+    if min_val.abs() >= max_val.abs()
+    {
+        max_abs = min_val.abs();
+    }
+    else if min_val.abs() < max_val.abs() 
+    {
+        max_abs = max_val.abs();
+    }
+
+    for i in 0..vector.len()
+    {
+        scaled_vector.push((vector[i] / max_abs) * scale);
+    }
+
+    return scaled_vector;
+}
+
+pub fn _invert_weighting_vec(vector: &Vec<f32>) -> Vec<f32>
+{
+    let (_, min_val, _, max_val, _) = get_vec_min_max(vector);
+    let mut inverted_vector: Vec<f32> = Vec::new();
+    for i in 0..vector.len()
+    {
+        inverted_vector.push((min_val + max_val) - vector[i]);
+    }
+    return inverted_vector;
+}
+
+fn binary_insert(vector: &mut Vec<f32>, val: f32)
+{
+
+}
+
+/*
+
+pub unsafe fn train_on_rand_seq(&mut self, nn_ptr: *mut NeuralNet, encoder_ptr: *mut NeuralNet) -> f32
+    {
+        /*
+        let sample_weightings: Vec<f32> = softmax(&self.ratings);       
+        let rand_seqs: Vec<&DataSeq> = 
+            random_choice::random_choice()
+            .random_choice_f32(
+                &self.seqs,
+                 &sample_weightings, 1
+            );
+        */
+
+        // train neural net pointer on all inputs/outputs in random selected sequence
+        let mut loss_sum: f32 = 0.0;
+        let mut loss_count: f32 = 0.0;
+        let n_select: i32 = rand::thread_rng().gen_range(1..=1);
+        for _ in 0..n_select
+        {   
+            let (idx, _) = 
+                self.weighted_idx_select(&self.ratings, 1.0);
+            //let idx: usize = rand::thread_rng().gen_range(0..self.ratings.len());
+            let rand_seq_id: &String = self.seqs.get(idx).unwrap();
+            let rand_seq: DataSeq = read_seq_from_dir(
+                "memory".to_string(), rand_seq_id
+            );
+
+            for i in 0..rand_seq.input_seq.len()
+            {
+                let input_array: ArrayD<f32> = rand_seq.input_seq[i].clone();
+                let output_array: ArrayD<f32> = rand_seq.output_seq[i].clone();
+                
+                //let latent_vec: ArrayD<f32> = (*encoder_ptr).forward(input_array);
+                let pred: ArrayD<f32> = (*nn_ptr).forward(input_array);
+
+                let loss_func: LossFn = get_loss_from_str("log_cosh_loss").unwrap();
+                let loss_func_deriv: LossFnDeriv = get_loss_deriv_from_str("log_cosh_loss").unwrap();
+                let loss_val: f32 = loss_func(pred.clone(), output_array.clone());
+                let grads: ArrayD<f32> = loss_func_deriv(pred, output_array);
+
+                // train
+                (*nn_ptr).zero_grads();
+                //(*encoder_ptr).zero_grads();
+
+                //println!("{:?}", grads);
+                (*nn_ptr).backward(grads);
+                //println!("{:?}", grads);
+                //(*encoder_ptr).backward(grads);
+                //std::process::exit(1);
+
+                (*nn_ptr).update_params(0.001);
+                //(*encoder_ptr).update_params(0.001);
+
+                loss_sum += loss_val;
+                loss_count += 1.0;
+            }
+
+            //if !keep_data
+            //{
+            //    self.seqs.remove(idx);
+            //    self.ratings.remove(idx);
+            //}
+        }
+        return loss_sum / loss_count;
+    }
+*/
+
+// selecting based on cumulative weights (suboptimal)
+/*
+        // obtain the list of levels in the heap
+        let mut level_vec: Vec<usize> = Vec::new();
+        // temp vec to store all indexes
+        let mut idx_vec: Vec<usize> = Vec::new();
+
+        for i in 0..max_storage_len
+        {
+            idx_vec.push(i);
+        }
+
+        let mut idx1: usize = 0;
+        let mut idx2: usize = 0;
+        for _ in 0..max_storage_len
+        {
+            let level_at_idx1: usize = (idx1 as f32 + 1.0).log2().floor() as usize;
+            let level_at_idx2: usize = (idx2 as f32 + 1.0).log2().floor() as usize;
+
+            if level_at_idx1 != level_at_idx2 || idx2 == max_storage_len - 1
+            {
+                if idx2 == max_storage_len - 1
+                {
+                    idx2 += 1;
+                }
+
+                let idx_slice: Vec<usize> = idx_vec[idx1..idx2].to_vec();
+                seq_storage.idx_level_cat.push(idx_slice);
+                idx1 = idx2;
+
+                level_vec.push(level_at_idx1);
+            }
+            idx2 += 1;
+        }
+
+        
+        // shift to negative and scale between -n and 0
+        let mut levels_scaled: Vec<f32> = Vec::new();
+        let n: f32 = 2.0;
+        let max_level: f32 = level_vec[level_vec.len() - 1] as f32;
+        for i in 0..level_vec.len()
+        {
+            let level_f: f32 = level_vec[i] as f32;
+            let scaled: f32 = ((level_f - max_level) / max_level) * n;
+            levels_scaled.push(scaled);
+        }
+        //println!("{:?}", level_vec);
+        //println!("{:?}", levels_scaled);
+
+        // use exponentiation formula for distribution
+        let mut levels_exp: Vec<f32> = Vec::new();
+        let first_scaled_level: f32 = levels_scaled[0];
+        let min_weight: f32 = 0.1;
+        let max_weight: f32 = 1.0;
+        for i in 0..levels_scaled.len()
+        {
+            let scaled_level: f32 = levels_scaled[i];
+            let a: f32 = (max_weight.ln() - min_weight.ln()) / first_scaled_level.abs();
+            let scaled_exp: f32 = ((a * scaled_level) + max_weight.ln()).exp();
+            levels_exp.push(scaled_exp);
+        }
+
+        //println!("{:?}", levels_scaled);
+        //println!("{:?}", levels_exp);
+
+        // create cumulative distribution
+        let mut total: f32 = 0.0;
+        for i in 0..levels_exp.len()
+        {
+            total += levels_exp[i];
+            seq_storage.cumul_level_weights.push(total);
+        }
+        //println!("{:?}", cumulative_weights);
+        //std::process::exit(1);
+        */

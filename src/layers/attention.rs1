@@ -1,0 +1,232 @@
+use ndarray::{Array2, Array3, ArrayD, ArrayView2, ArrayView3, ArrayViewMut1, Axis, Shape};
+use rand::Rng;
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+
+use crate::math_functions::{sigmoid, tanh};
+
+#[derive(Serialize, Deserialize)]
+pub struct SelfAttention
+{
+    pub matrices_query: Array3<f64>,
+    pub matrices_key: Array3<f64>,
+    pub matrices_value: Array3<f64>,
+    pub biases_query: Array3<f64>,
+    pub biases_key: Array3<f64>,
+    pub biases_value: Array3<f64>,
+
+    pub attention_spaces: Vec<Array3<f64>>,
+
+    pub matrices_query_grads: Array3<f64>,
+    pub matrices_key_grads: Array3<f64>,
+    pub matrices_value_grads: Array3<f64>,
+    pub biases_query_grads: Array3<f64>,
+    pub biases_key_grads: Array3<f64>,
+    pub biases_value_grads: Array3<f64>,
+
+    pub input_tensor: Array2<f64>,
+    pub input_len: usize,
+    pub attention_heads: usize,
+    pub embedding_len: usize,
+    pub mode: String // "masked" or "unmasked"
+}
+impl SelfAttention
+{
+    pub fn new(attention_heads: usize, embedding_len: usize, mode: &str) -> Self
+    {
+        
+        return Self
+        {
+            matrices_query: Array3::zeros((0, 0, 0)),
+            matrices_key: Array3::zeros((0, 0, 0)),
+            matrices_value: Array3::zeros((0, 0, 0)),
+            biases_query: Array3::zeros((0, 0, 0)),
+            biases_key: Array3::zeros((0, 0, 0)),
+            biases_value: Array3::zeros((0, 0, 0)),
+
+            attention_spaces: Vec::new(),
+
+            matrices_query_grads: Array3::zeros((0, 0, 0)),
+            matrices_key_grads: Array3::zeros((0, 0, 0)),
+            matrices_value_grads: Array3::zeros((0, 0, 0)),
+            biases_query_grads: Array3::zeros((0, 0, 0)),
+            biases_key_grads: Array3::zeros((0, 0, 0)),
+            biases_value_grads: Array3::zeros((0, 0, 0)),
+
+            input_tensor: Array2::zeros((0, 0)),
+            input_len: 0,
+            attention_heads,
+            embedding_len,
+            mode: mode.to_string()
+        };
+    }
+
+    pub fn forward(&mut self, input_tensors: ArrayD<f64>) -> ArrayD<f64>
+    {
+        let input_len: usize = input_tensors.shape()[1];
+        let seq_len: usize = input_tensors.shape()[0];
+        let input_tensors: Array2<f64> = input_tensors.into_shape((seq_len, input_len)).unwrap();
+
+        // (seq_len, input_len) * (input_len * embedding_len)
+        if self.input_len == 0
+        {
+            self.input_len = input_len;
+            self.matrices_query = Array3::zeros((self.attention_heads, self.input_len, self.embedding_len));
+            self.matrices_key = Array3::zeros((self.attention_heads, self.input_len, self.embedding_len));
+            self.matrices_value = Array3::zeros((self.attention_heads, self.input_len, self.embedding_len));
+            let range: f64 = (6.0 / (self.input_len + self.embedding_len) as f64).sqrt();
+            self.matrices_query.map_mut(
+                |v: &mut f64| 
+                *v = rand::thread_rng().gen_range(-range..range)
+            );
+            self.matrices_key.map_mut(
+                |v: &mut f64| 
+                *v = rand::thread_rng().gen_range(-range..range)
+            );
+            self.matrices_value.map_mut(
+                |v: &mut f64| 
+                *v = rand::thread_rng().gen_range(-range..range)
+            );
+        }
+
+        // (seq_len, input_len) * (input_len * embedding_len)
+        
+        // for each attention head (for loop)
+        let attention_head_iter = 
+            self.matrices_query.axis_iter(Axis(0))
+            .zip(self.matrices_key.axis_iter(Axis(0))
+            .zip(self.matrices_value.axis_iter(Axis(0))));
+
+
+        let mut final_embeddings: Array2<f64> = Array2::zeros((self.embedding_len, seq_len));
+
+        for (query_matrix, 
+            (key_matrix, 
+             value_matrix)) in attention_head_iter
+        {
+            // calculate query, key and matrix embeddings with tanh
+            let query_embeddings: Array2<f64> = input_tensors.dot(&query_matrix).mapv(|v: f64| tanh(v));
+            let key_embeddings: Array2<f64> = input_tensors.dot(&key_matrix).mapv(|v: f64| tanh(v));
+            let value_embeddings: Array2<f64> = input_tensors.dot(&value_matrix).mapv(|v: f64| tanh(v));
+            
+            // (seq_len, embedding) * (embedding * seq_len) = (seq_len * seq_len)
+            let mut attention_space: Array2<f64> = key_embeddings.dot(&query_embeddings.t());
+            
+            // softmax attention space
+            /**/
+            //println!("{:?}", attention_space);
+            attention_space
+                .axis_iter_mut(Axis(1))
+                //.into_par_iter()
+                .for_each(
+                    |mut slice: ArrayViewMut1<f64>|
+                    {
+                        let mut max: f64 = -1e+10;
+                        let mut sum: f64 = 0.0;
+                        for val in slice.iter()
+                        {
+                            if *val > max
+                            {
+                                max = *val;
+                            }
+                        }
+
+                        for val in slice.iter()
+                        {
+                            sum += (*val - max).exp();
+                        }
+
+                        slice.map_mut(|v: &mut f64| *v = (*v - max).exp() / sum);
+                    }
+                );
+
+            let attention_space_broadcasted: Array3<f64> = attention_space.insert_axis(Axis(0));
+            let attention_space_broadcasted: ArrayView3<f64> = 
+                attention_space_broadcasted
+                .broadcast((self.embedding_len, seq_len, seq_len)).unwrap();
+
+            self.attention_spaces.push(attention_space_broadcasted.into_owned());
+            
+            let mut value_embeddings: Array3<f64> = value_embeddings.into_shape((1, seq_len, self.embedding_len)).unwrap();
+            //println!("{:?}", value_embeddings);
+            value_embeddings = value_embeddings.permuted_axes([2, 1, 0]);
+
+            let attention_space_broadcasted_dot: Array3<f64> = 
+            &value_embeddings * &attention_space_broadcasted;
+            
+            let summed_embeddings: Array2<f64> = 
+                attention_space_broadcasted_dot.sum_axis(Axis(1));
+            
+            final_embeddings += &summed_embeddings;
+        }
+        
+        let output_embeddings: ArrayD<f64> = final_embeddings.t().into_owned().into_dyn();
+        return output_embeddings;
+    }
+
+    pub fn backward(&mut self, gradients: ArrayD<f64>) -> ArrayD<f64>
+    {
+        let seq_len: usize = gradients.shape()[0];
+        let gradients: Array2<f64> = gradients.into_shape((seq_len, self.embedding_len)).unwrap();
+        let gradients: Array2<f64> = gradients.t().into_owned();
+
+        // gradients (seq_len, embeddings)
+        // convert to (embeddings, seq_len, seq_len)
+        // results were summed
+        let gradients: Array3<f64> = gradients.insert_axis(Axis(0));
+        let mut gradients: ArrayView3<f64> = gradients.broadcast((seq_len, self.embedding_len, seq_len)).unwrap();
+        gradients = gradients.permuted_axes([1, 0, 2]);
+        
+        // for each attention head (for loop)
+        let attention_head_iter = 
+            self.matrices_query.axis_iter(Axis(0))
+            .zip(self.matrices_key.axis_iter(Axis(0))
+            .zip(self.matrices_value.axis_iter(Axis(0))));
+
+        let i: usize = 0; // for iterating through attention space vector
+        for (query_matrix, 
+            (key_matrix, 
+             value_matrix)) in attention_head_iter
+        {
+            let gradients_copy: Array3<f64> = gradients.into_owned().clone();
+
+            // value embeddings was multiplied elementwise with the
+            // broadcasted softmaxed attention values
+            // derivative of embedding values = softmaxed attention values sum along axis 0
+            let value_embedding_grads: Array2<f64> = 
+                (&gradients_copy * &self.attention_spaces[i]).sum_axis(Axis(2));
+            
+            println!("{:?}", value_embedding_grads.t());
+            std::process::exit(1);
+
+        }
+          
+
+        return gradients.into_owned().into_dyn();
+    }
+
+    pub fn update_params(&mut self, lr: f64)
+    {
+        self.matrices_key -= &(lr * &self.matrices_key_grads);
+        self.matrices_query -= &(lr * &self.matrices_query_grads);
+        self.matrices_value -= &(lr * &self.matrices_value_grads);
+    }
+
+    pub fn zero_grads(&mut self)
+    {
+        self.matrices_key_grads.fill(0.0);
+        self.matrices_query_grads.fill(0.0);
+        self.matrices_value_grads.fill(0.0);
+        self.attention_spaces.clear();
+    }
+
+    pub fn details(&self)
+    {
+        println!("KEY_MATRICES:\n{:?}", self.matrices_key);
+        println!("======================================");
+        println!("QUERY_MATRICES:\n{:?}", self.matrices_query);
+        println!("=====================================");
+        println!("VALUE_MATRICES:\n{:?}", self.matrices_value);
+        println!("=====================================");
+    }
+}
