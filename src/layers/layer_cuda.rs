@@ -1,9 +1,11 @@
 use std::os::raw::c_void;
 
+use crate::neuralnet::TraversePtrs;
+
 trait LayerCuda
 {
     fn forward(
-        &mut self, input: *mut c_void, weight: *mut c_void, use_dropout: bool
+        &mut self, inputs: *mut c_void, weights: *mut c_void, use_dropout: bool
     ) -> *mut c_void;
 
     fn backward(&mut self);
@@ -13,8 +15,25 @@ trait LayerCuda
     fn move_ptrs_to_arrays(&mut self);
 }
 
-// contains the usual pointers each layer will typically require
-pub struct LayerBaseStruct
+// composition structs to reduce code repetition
+pub struct IOPtrs
 {
-    
+    pub in_shape: (usize, usize, usize),
+    pub out_shape: (usize, usize, usize),
+    pub output_traverse_ptr: *mut TraversePtrs,
+}
+
+pub struct ParameterPtrs
+{
+
+}
+
+pub struct AllocationStatusPtrs
+{
+
+}
+
+pub struct MiscPtrs
+{
+
 }
