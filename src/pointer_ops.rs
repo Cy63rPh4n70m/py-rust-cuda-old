@@ -80,6 +80,13 @@ pub fn array_to_cuda_ptr(array: &mut ArrayD<f32>) -> *mut f32
     return cuda_ptr;
 }
 
+pub fn vec_to_cuda_ptr(array: &mut Vec<f32>) -> *mut f32
+{
+    let ptr: *mut f32 = array.as_mut_ptr();
+    let cuda_ptr: *mut f32 = to_cuda(ptr, array.len() as u32);
+    return cuda_ptr;
+}
+
 pub fn new_cpu_ptr_str(shape: &[usize]) -> String
 {
     let mut length: usize = 1;

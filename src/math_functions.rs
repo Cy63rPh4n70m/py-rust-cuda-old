@@ -1,4 +1,6 @@
+use half::vec;
 use ndarray::ArrayD;
+use rand::Rng;
 
 use crate::types::*;
 
@@ -299,6 +301,18 @@ pub fn matmul(vector: &Vec<f32>, weights2d: &Vec<Vec<f32>>) -> Vec<f32>
     }
 
     return output_vec;
+}
+
+pub fn random_float_vec(length: usize, lower_range: f32, upper_range: f32) -> Vec<f32>
+{
+    let mut vector: Vec<f32> = Vec::new();
+    let mut rand_gen: rand::prelude::ThreadRng = rand::thread_rng();
+    for _ in 0..length
+    {
+        vector.push(rand_gen.gen_range(lower_range..=upper_range));
+    }
+
+    return vector;
 }
 
 // normal distribution equation
