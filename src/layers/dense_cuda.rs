@@ -45,13 +45,13 @@ impl DenseCuda
     pub fn forward(&mut self, str_ptr_in: String, str_ptr_weight: String) -> String
     {
         ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
-        let batch: usize = self.in_shape.0;
-        let rows: usize = self.in_shape.1;
-        let cols: usize = self.in_shape.2;
+        let batch: usize = self.io_ptrs.in_shape.0;
+        let rows: usize = self.io_ptrs.in_shape.1;
+        let cols: usize = self.io_ptrs.in_shape.2;
 
         ////println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
 
-        let range: f32 = (6.0 / (cols + self.n_out) as f32).sqrt();
+        let range: f32 = (6.0 / (cols + self.io_ptrs.in_shape.2) as f32).sqrt();
 
         if !self.bias_ptr_allocated
         {   
