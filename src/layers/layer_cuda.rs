@@ -112,20 +112,17 @@ pub struct MiscData
     pub backward_count_weight_prev: Option<Box<f32>>,
     pub backward_count_in_prev: Option<Box<f32>>,
 
-    pub batch_size: f32,
     pub count: u128,
 }
 impl MiscData
 {
-    pub fn new(batch_size: f32) -> Self
+    pub fn new() -> Self
     {
         return Self
         {
             backward_count: None,
             backward_count_weight_prev: None,
             backward_count_in_prev: None,
-
-            batch_size,
             count: 0
         }
     }
