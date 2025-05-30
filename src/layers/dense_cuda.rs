@@ -5,19 +5,19 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::de::IoRead;
 
-use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr}};
+use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled}, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs, MiscData, ParameterPtrs, WeightTensors};
+use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
 pub struct DenseCuda
 {
     pub name: String,
     pub use_bias: bool,
+    pub batch_size: f32,
     
     pub io_ptrs: IOPtrs,
     pub parameter_ptrs: ParameterPtrs,
     pub allocation_status: AllocationStatus,
-    pub misc_data: MiscData,
     pub weight_tensors: WeightTensors
 
 }
@@ -33,31 +33,29 @@ impl DenseCuda
             //io_ptrs,
             name: name.to_string(),
             use_bias,
+            batch_size: 0.0,
             io_ptrs: IOPtrs::new((batch, rows, n_in), (batch, rows, n_out)),
             parameter_ptrs: ParameterPtrs::new(),
             allocation_status: AllocationStatus::new(),
-            misc_data: MiscData::new(),
             weight_tensors: WeightTensors::new()
         }
     }
     
     // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, str_ptr_in: String, str_ptr_weight: String) -> String
+    pub fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs) -> *mut TraversePtrs
     {
-        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
         let batch: usize = self.io_ptrs.in_shape.0;
         let rows: usize = self.io_ptrs.in_shape.1;
         let cols: usize = self.io_ptrs.in_shape.2;
 
-        ////println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
         let range: f32 = (6.0 / (cols + self.io_ptrs.in_shape.2) as f32).sqrt();
 
-        if !self.bias_ptr_allocated
+        if !self.allocation_status.ptrs_allocated
         {   
             // initialise biases and pointers
-            if !self.bias_array_allocated
+            if !self.allocation_status.arrays_allocated
             {
+                // initialize bias and weight arrays
                 self.biases = ArrayD::from_shape_fn(
                     IxDyn(&[batch, rows, self.n_out]), 
                     |_| rand::thread_rng().gen_range(-range..range)
