@@ -5,7 +5,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::de::IoRead;
 
-use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
+use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_trav_in_ptrs, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
@@ -130,13 +130,13 @@ impl DenseCuda
             self.use_bias, self.allocation_status.zero_output
         );
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
 
         //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
         //println!("weight: {:?}", cuda_ptr_to_array(weight_ptr, &[batch, cols, self.n_out]));
         //println!("output: {:?}\n", cuda_ptr_to_array(output_ptr, &[batch, rows, self.n_out]));
 
-        return self.output_traverse_ptr.clone();
+        return self.io_ptrs.output_traverse_ptr;
 
     }
 
