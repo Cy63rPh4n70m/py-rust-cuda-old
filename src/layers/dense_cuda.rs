@@ -79,10 +79,13 @@ impl DenseCuda
             if trav_ptr_weight.is_null()
             {
                 // create pointer and vector for weights
-                self.weight_tensors.weight = random_float_vec(
-                    batch * cols * self.io_ptrs.out_shape.2, 
-                    -range, range
-                );
+                if !self.allocation_status.arrays_allocated
+                {
+                    self.weight_tensors.weight = random_float_vec(
+                        batch * cols * self.io_ptrs.out_shape.2, 
+                        -range, range
+                    );
+                }
 
                 // initialize weight ptrs
                 self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
@@ -107,55 +110,17 @@ impl DenseCuda
                 (batch * cols * self.io_ptrs.out_shape.2) as u32
             );
 
-            
+            self.allocation_status.arrays_allocated = true;
 
-
-            self.bias_ptr_allocated = true;
-
-            // weights are trainable and stored in layer
-            if !self.weight_ptr_allocated
-            {
-                if str_ptr_weight == "none"
-                {
-                    if !self.weight_array_allocated
-                    {
-                        // initialise weights and weight pointer
-                        self.weights = ArrayD::from_shape_fn(
-                            IxDyn(&[batch, cols, self.n_out]), 
-                            |_| rand::thread_rng().gen_range(-range..range)
-                        );
-
-                        self.weight_array_allocated = true;
-                        
-                    }
-                    self.weight_ptr = array_to_cuda_ptr_str(&mut self.weights);
-                    self.weight_grad_ptr = new_cuda_ptr_str(&[batch, cols, self.n_out]);
-
-                    ////println!("weight: {:?}, {:?}", self.weight_ptr, self.weight_grad_ptr);
-                }
-                else
-                {
-                    // weights are not trainable and layer is used just for matrix dot product
-                    let (weight_traverse_ptr, grad_weight_traverse_ptr, 
-                        backward_count_weight_prev) = 
-                        get_traverse_str_ptr(&str_ptr_weight);
-                    
-                    self.backward_count_weight_prev = backward_count_weight_prev;
-                    self.weight_ptr = ptr_to_string(weight_traverse_ptr);
-                    self.weight_grad_ptr = ptr_to_string(grad_weight_traverse_ptr);
-
-                    ////println!("weight: {:?}, {:?}", self.weight_ptr, self.weight_grad_ptr);
-                }
-                self.weight_ptr_allocated = true;
-
-                init_layer_connections(
-                    &mut self.backward_count, &str_ptr_in, 
-                    &mut self.backward_count_in_prev, &mut self.input_ptr, 
-                    &mut self.input_grad_ptr, &mut self.output_ptr, 
-                    &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                    &[batch, rows, self.n_out]
-                );
-            }
+            // initialize the input traversal pointers from input/previous layer
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                batch * rows * self.io_ptrs.out_shape.2
+            );
         }
 
         // convert strings to pointers
