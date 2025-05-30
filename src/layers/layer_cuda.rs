@@ -28,6 +28,9 @@ pub struct IOPtrs
     pub output_grad_ptr: *mut f32,
 
     pub output_traverse_ptr: Option<Box<TraversePtrs>>,
+    pub backward_count: Option<Box<f32>>,
+    pub backward_count_weight_prev: Option<Box<f32>>,
+    pub backward_count_in_prev: Option<Box<f32>>,
 }
 impl IOPtrs
 {
@@ -41,6 +44,9 @@ impl IOPtrs
             output_ptr: std::ptr::null_mut(),
             output_grad_ptr: std::ptr::null_mut(),
             output_traverse_ptr: None,
+            backward_count: None,
+            backward_count_weight_prev: None,
+            backward_count_in_prev: None,
         }
     }
 }
@@ -102,31 +108,6 @@ impl AllocationStatus
             zero_output: true,
             zero_input_grad: false,
             zero_weight_grad: false
-        }
-    }
-}
-
-pub struct MiscData
-{
-    pub backward_count: Option<Box<f32>>,
-    pub backward_count_weight_prev: Option<Box<f32>>,
-    pub backward_count_in_prev: Option<Box<f32>>,
-
-    pub batch_size: f32,
-    pub count: u128,
-}
-impl MiscData
-{
-    pub fn new(batch_size: f32) -> Self
-    {
-        return Self
-        {
-            backward_count: None,
-            backward_count_weight_prev: None,
-            backward_count_in_prev: None,
-
-            batch_size,
-            count: 0
         }
     }
 }
