@@ -147,9 +147,10 @@ impl DenseCuda
         //{
         ////println!("output: {:?}", cuda_ptr_to_array(output_ptr, &[batch, rows, self.n_out]));
         matmul_add_bias_tiled(
-            input_ptr, batch as u32, rows as u32, cols as u32, 
-            weight_ptr, batch as u32, cols as u32, self.n_out as u32,
-            output_ptr, bias_ptr, self.use_bias, self.zero_output
+            self.io_ptrs.input_ptr, batch as u32, rows as u32, cols as u32, 
+            self.parameter_ptrs.weight_ptr, batch as u32, cols as u32, self.io_ptrs.out_shape.2 as u32,
+            self.io_ptrs.output_ptr, self.parameter_ptrs.biases_ptr, 
+            self.use_bias, self.allocation_status.zero_output
         );
 
         set_zero_counter(&self.backward_count);
