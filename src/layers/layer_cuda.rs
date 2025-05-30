@@ -20,20 +20,55 @@ pub struct IOPtrs
 {
     pub in_shape: (usize, usize, usize),
     pub out_shape: (usize, usize, usize),
+
+    pub output_ptr: *mut f32,
+    pub output_grad_ptr: *mut f32,
+
+    pub input_ptr: *mut f32,
+    pub input_grad_ptr: *mut f32,
+
     pub output_traverse_ptr: *mut TraversePtrs,
 }
 
 pub struct ParameterPtrs
 {
+    pub biases_ptr: *mut f32,
+    pub bias_grad_ptr: *mut f32,
+    pub bias_vel_ptr: *mut f32,
+    pub bias_moment_ptr: *mut f32,
 
+    pub weight_ptr: *mut f32,
+    pub weight_grad_ptr: *mut f32,
+    pub weight_vel_ptr: *mut f32,
+    pub weight_moment_ptr: *mut f32,
 }
 
-pub struct AllocationStatusPtrs
+pub struct AllocationStatus
 {
-
+    pub weight_ptr_allocated: bool, 
+    pub bias_ptr_allocated: bool, 
+    pub weight_array_allocated: bool,
+    pub bias_array_allocated: bool,
+    
+    pub use_bias: bool,
+    
+    pub zero_output: bool,
+    pub zero_input_grad: bool,
+    pub zero_weight_grad: bool
 }
 
-pub struct MiscPtrs
+pub struct MiscData
 {
+    pub backward_count: Box<f32>,
+    pub backward_count_weight_prev: Box<f32>,
+    pub backward_count_in_prev: Box<f32>,
 
+    pub batch_size: f32,
+    pub count: u128,
+}
+
+pub struct WeightTensors
+{
+    pub weight: Vec<f32>,
+    pub biases: Vec<f32>,
 }
