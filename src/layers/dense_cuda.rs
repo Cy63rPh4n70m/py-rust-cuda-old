@@ -123,29 +123,6 @@ impl DenseCuda
             );
         }
 
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        let output_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-        let bias_ptr: *mut f32 = string_to_ptr(&self.biases_ptr);
-
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-        //copy_cuda_to_cuda(
-        //    input_ptr, 
-        //    input.get_ptr(), 
-        //    &[batch, rows, cols]
-        //);
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //{
-        ////println!("output: {:?}", cuda_ptr_to_array(output_ptr, &[batch, rows, self.n_out]));
         matmul_add_bias_tiled(
             self.io_ptrs.input_ptr, batch as u32, rows as u32, cols as u32, 
             self.parameter_ptrs.weight_ptr, batch as u32, cols as u32, self.io_ptrs.out_shape.2 as u32,
@@ -160,27 +137,6 @@ impl DenseCuda
         //println!("output: {:?}\n", cuda_ptr_to_array(output_ptr, &[batch, rows, self.n_out]));
 
         return self.output_traverse_ptr.clone();
-        //}
-        //else
-        //{
-        //    matmul_add_bias(
-        //        input_ptr, batch as u32, rows as u32, cols as u32, 
-        //        weight_ptr, batch as u32, cols as u32, self.n_out as u32,
-        //        output_ptr, bias_ptr
-        //    );
-        //}
-        //let end = start.elapsed();
-        ////println!("dense: {:.6}", end.as_secs_f64());
-
-        ////println!("-----------------------------");
-        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-        // current pointer is already recorded by previous layer, don't free
-        //input.set_ptr(output_ptr, vec![batch, rows, self.n_out]);
-
-        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
-        ////println!("-----------------------------");
-        //exit(1);
-        // previous pointer will be recorded in previous layer
 
     }
 
