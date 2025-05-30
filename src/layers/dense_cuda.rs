@@ -89,32 +89,26 @@ impl DenseCuda
                 self.parameter_ptrs.weight_grad_ptr = new_cuda_array(
                     (batch * cols * self.io_ptrs.out_shape.2) as u32
                 );
-                self.parameter_ptrs.weight_vel_ptr = new_cuda_array(
-                    (batch * cols * self.io_ptrs.out_shape.2) as u32
-                );
-                self.parameter_ptrs.weight_moment_ptr = new_cuda_array(
-                    (batch * cols * self.io_ptrs.out_shape.2) as u32
-                );
-                
+            }
+            else
+            {
+                unsafe
+                {
+                    self.parameter_ptrs.weight_ptr = (*trav_ptr_weight).ptr;
+                    self.parameter_ptrs.weight_grad_ptr = (*trav_ptr_weight).grad_ptr;
+                    self.io_ptrs.backward_count_weight_prev = (*trav_ptr_weight).backward_pass_count;
+                }
             }
 
+            self.parameter_ptrs.weight_vel_ptr = new_cuda_array(
+                (batch * cols * self.io_ptrs.out_shape.2) as u32
+            );
+            self.parameter_ptrs.weight_moment_ptr = new_cuda_array(
+                (batch * cols * self.io_ptrs.out_shape.2) as u32
+            );
 
-            // initialise input pointer, set the input as the result pointer from previous layer
-            // tensor struct at this stage will contain the result ptr of the previous layer
-            ////////////////////////////////////////////////////////////////
-            //self.input_ptr = input.get_ptr_as_str();
-            //self.input_t_ptr = new_cuda_ptr_str(&[batch, cols, rows]);
-            //////////////////////////////////////////////////////////////////
-
-            // initialise the result tensor/pointer
-            //self.output_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
-            //self.output_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
             
-            //self.input_grads_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            //self.output_grads_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
 
-            //self.in_shape = (batch, rows, cols);
-            //self.out_shape = (batch, rows, self.n_out);
 
             self.bias_ptr_allocated = true;
 
