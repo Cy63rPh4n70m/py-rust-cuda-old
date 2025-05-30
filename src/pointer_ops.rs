@@ -131,17 +131,12 @@ pub fn cuda_ptr_to_array(ptr: *mut f32, shape: &[usize]) -> ArrayD<f32>
     }
 }
 
-pub fn cuda_ptr_to_vec(ptr: *mut f32, shape: &[usize]) -> Vec<f32>
+pub fn cuda_ptr_to_vec(ptr: *mut f32, length: usize) -> Vec<f32>
 {
-    unsafe {
-        let mut length: u32 = 1;
-        for i in 0..shape.len()
-        {
-            length *= shape[i] as u32;
-        }
-
-        let result: *mut f32 = to_cpu(ptr, length);
-        let result_slice: &mut [f32] = std::slice::from_raw_parts_mut(result, length as usize);
+    unsafe 
+    {
+        let result: *mut f32 = to_cpu(ptr, length as u32);
+        let result_slice: &mut [f32] = std::slice::from_raw_parts_mut(result, length);
         let result_vec: Vec<f32> = result_slice.to_vec();
         
         free_cpu_array(result);
