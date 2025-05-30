@@ -5,7 +5,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::de::IoRead;
 
-use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled}, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr}};
+use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
@@ -60,14 +60,6 @@ impl DenseCuda
                     batch * rows * self.io_ptrs.out_shape.2, 
                     -0.001, 0.001
                 );
-
-                // initialize weight arrays
-                self.weight_tensors.weight = random_float_vec(
-                    batch * cols * self.io_ptrs.out_shape.2, 
-                    -range, range
-                );
-
-                self.allocation_status.arrays_allocated = true;
             }
 
             // initialize bias pointers
@@ -81,7 +73,31 @@ impl DenseCuda
             self.parameter_ptrs.bias_moment_ptr = new_cuda_array(
                 (batch * rows * self.io_ptrs.out_shape.2) as u32
             );
-            
+
+
+            // decide whether to create weight based on pointer availability
+            if trav_ptr_weight.is_null()
+            {
+                // create pointer and vector for weights
+                self.weight_tensors.weight = random_float_vec(
+                    batch * cols * self.io_ptrs.out_shape.2, 
+                    -range, range
+                );
+
+                // initialize weight ptrs
+                self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
+                self.parameter_ptrs.weight_grad_ptr = new_cuda_array(
+                    (batch * cols * self.io_ptrs.out_shape.2) as u32
+                );
+                self.parameter_ptrs.weight_vel_ptr = new_cuda_array(
+                    (batch * cols * self.io_ptrs.out_shape.2) as u32
+                );
+                self.parameter_ptrs.weight_moment_ptr = new_cuda_array(
+                    (batch * cols * self.io_ptrs.out_shape.2) as u32
+                );
+                
+            }
+
 
             // initialise input pointer, set the input as the result pointer from previous layer
             // tensor struct at this stage will contain the result ptr of the previous layer
