@@ -40,51 +40,7 @@ impl DenseCuda
             weight_tensors: WeightTensors::new()
         }
     }
-
-    // assumes 3 dimensional weights
-    /*
-    pub fn set_weights_from_ptr(
-        &mut self, 
-        tensor_ptr: *mut f32, 
-        shape: (usize, usize, usize), 
-        transpose_before_copy: bool)
-    {   
-        if !self.weight_ptr_allocated
-        {
-            if transpose_before_copy
-            {
-                self.weight_ptr = new_cuda_ptr_str(&[shape.0, shape.2, shape.1]);
-                self.weight_gradients_ptr = new_cuda_ptr_str(&[shape.0, shape.2, shape.1]);
-                self.weight_velocity_ptr = new_cuda_ptr_str(&[shape.0, shape.2, shape.1]);
-            }
-            else
-            {
-                self.weight_ptr = new_cuda_ptr_str(&[shape.0, shape.1, shape.2]);
-                self.weight_gradients_ptr = new_cuda_ptr_str(&[shape.0, shape.1, shape.2]);
-                self.weight_velocity_ptr = new_cuda_ptr_str(&[shape.0, shape.1, shape.2]);
-            }
-            self.weight_ptr_allocated = true;
-            self.weight_array_allocated = true;
-        }
-
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-
-        if transpose_before_copy
-        {
-            transpose_2d(weight_ptr, tensor_ptr, shape.0, shape.1, shape.2);
-        }
-        else
-        {
-            copy_cuda_to_cuda(weight_ptr, tensor_ptr, &[shape.0, shape.1, shape.2]);
-        }
-    }
-    */
-
-    //pub fn get_weight_grads_as_ptr(&mut self) -> *mut f32
-    //{
-    //    return string_to_ptr(&self.weight_gradients_ptr);
-    //}
-
+    
     // supports batch matrix multiplication unlike cpu
     pub fn forward(&mut self, str_ptr_in: String, str_ptr_weight: String) -> String
     {
