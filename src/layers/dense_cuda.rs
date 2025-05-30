@@ -244,27 +244,27 @@ impl LayerCuda for DenseCuda
     fn details(&self)
     {
         println!("Layer type: DENSE | Layer name: {:?}", self.name);
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.weight_ptr, self.weight_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
-        println!("Input shape: {:?}", self.in_shape);
-        println!("Output shape: {:?}", self.out_shape);
-        println!("Weights: \n{:?}", self.weights);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Input shape: {:?}", self.io_ptrs.in_shape);
+        println!("Output shape: {:?}", self.io_ptrs.out_shape);
+        println!("Weights: \n{:?}", self.weight_tensors.weight);
         if self.use_bias
         {
-            println!("Biases: \n{:?}", self.biases);
+            println!("Biases: \n{:?}", self.weight_tensors.biases);
         }
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         let mut count: usize = 0;
         if self.use_bias
         {
-            count += self.out_shape.0 * self.out_shape.1 * self.out_shape.2;
+            count += self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2;
         }
 
-        count += self.in_shape.0 * self.in_shape.2 * self.out_shape.2;
+        count += self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.2 * self.io_ptrs.out_shape.2;
 
         return count
     }
