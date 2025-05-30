@@ -85,10 +85,8 @@ impl ParameterPtrs
 
 pub struct AllocationStatus
 {
-    pub weight_ptr_allocated: bool, 
-    pub bias_ptr_allocated: bool, 
-    pub weight_array_allocated: bool,
-    pub bias_array_allocated: bool,
+    pub ptrs_allocated: bool, 
+    pub arrays_allocated: bool,
         
     pub zero_output: bool,
     pub zero_input_grad: bool,
@@ -100,10 +98,8 @@ impl AllocationStatus
     {
         return Self
         {
-            weight_ptr_allocated: false,
-            bias_ptr_allocated: false,
-            weight_array_allocated: false,
-            bias_array_allocated: false,
+            ptrs_allocated: false,
+            arrays_allocated: false,
 
             zero_output: true,
             zero_input_grad: false,
