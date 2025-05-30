@@ -55,20 +55,32 @@ impl DenseCuda
             // initialise biases and pointers
             if !self.allocation_status.arrays_allocated
             {
-                // initialize bias and weight arrays
-                self.biases = ArrayD::from_shape_fn(
-                    IxDyn(&[batch, rows, self.n_out]), 
-                    |_| rand::thread_rng().gen_range(-range..range)
+                // initialize bias arrays
+                self.weight_tensors.biases = random_float_vec(
+                    batch * rows * self.io_ptrs.out_shape.2, 
+                    -0.001, 0.001
                 );
-                self.bias_array_allocated = true
+
+                // initialize weight arrays
+                self.weight_tensors.weight = random_float_vec(
+                    batch * cols * self.io_ptrs.out_shape.2, 
+                    -range, range
+                );
+
+                self.allocation_status.arrays_allocated = true;
             }
 
-            self.biases_ptr = array_to_cuda_ptr_str(&mut self.biases);
-            self.bias_gradients_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
-            self.bias_velocity_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
-            self.weight_velocity_ptr = new_cuda_ptr_str(&[batch, cols, self.n_out]);
-            self.bias_momentum_ptr = new_cuda_ptr_str(&[batch, rows, self.n_out]);
-            self.weight_momentum_ptr = new_cuda_ptr_str(&[batch, cols, self.n_out]);
+            // initialize bias pointers
+            self.parameter_ptrs.biases_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.biases);
+            self.parameter_ptrs.bias_grad_ptr = new_cuda_array(
+                (batch * rows * self.io_ptrs.out_shape.2) as u32
+            );
+            self.parameter_ptrs.bias_vel_ptr = new_cuda_array(
+                (batch * rows * self.io_ptrs.out_shape.2) as u32
+            );
+            self.parameter_ptrs.bias_moment_ptr = new_cuda_array(
+                (batch * rows * self.io_ptrs.out_shape.2) as u32
+            );
             
 
             // initialise input pointer, set the input as the result pointer from previous layer
