@@ -27,10 +27,10 @@ pub struct IOPtrs
     pub output_ptr: *mut f32,
     pub output_grad_ptr: *mut f32,
 
-    pub output_traverse_ptr: Option<Box<TraversePtrs>>,
-    pub backward_count: Option<Box<f32>>,
-    pub backward_count_weight_prev: Option<Box<f32>>,
-    pub backward_count_in_prev: Option<Box<f32>>,
+    pub output_traverse_ptr: *mut TraversePtrs,
+    pub backward_count: *mut usize,
+    pub backward_count_weight_prev: *mut usize,
+    pub backward_count_in_prev: *mut usize,
 }
 impl IOPtrs
 {
@@ -43,10 +43,10 @@ impl IOPtrs
             input_grad_ptr: std::ptr::null_mut(),
             output_ptr: std::ptr::null_mut(),
             output_grad_ptr: std::ptr::null_mut(),
-            output_traverse_ptr: None,
-            backward_count: None,
-            backward_count_weight_prev: None,
-            backward_count_in_prev: None,
+            output_traverse_ptr: std::ptr::null_mut(),
+            backward_count: std::ptr::null_mut(),
+            backward_count_weight_prev: std::ptr::null_mut(),
+            backward_count_in_prev: std::ptr::null_mut(),
         }
     }
 }
