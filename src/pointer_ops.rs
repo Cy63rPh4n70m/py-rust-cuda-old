@@ -252,10 +252,9 @@ pub fn increment_counter(backward_pass_count: &String)
     unsafe { *backward_pass_count += 1.0 }
 }
 
-pub fn set_zero_counter(backward_pass_count: &String)
+pub fn set_zero_counter(backward_pass_count: *mut usize)
 {
-    let backward_pass_count: *mut f32 = string_to_ptr(backward_pass_count);
-    unsafe { *backward_pass_count = 0.0 }
+    unsafe { *backward_pass_count = 0 }
 }
 
 pub fn counter_is_zero(backward_pass_count: &String) -> bool
