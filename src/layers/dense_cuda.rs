@@ -225,29 +225,17 @@ impl LayerCuda for DenseCuda
     //    return self.weight_gradients_ptr.clone();
     //}
 
-    pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32, only_bias: bool)
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        let bias_ptr: *mut f32 = string_to_ptr(&self.biases_ptr);
-        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
-        let bias_grad_ptr: *mut f32 = string_to_ptr(&self.bias_gradients_ptr);
-        let weight_velocity_ptr: *mut f32 = string_to_ptr(&self.weight_velocity_ptr);
-        let bias_velocity_ptr: *mut f32 = string_to_ptr(&self.bias_velocity_ptr);
-        let weight_momentum_ptr: *mut f32 = string_to_ptr(&self.weight_momentum_ptr);
-        let bias_momentum_ptr: *mut f32 = string_to_ptr(&self.bias_momentum_ptr);
-
-        //scalar_op_3d_inplace(weight_grad_ptr, self.lr, 2, self.in_shape.0, self.in_shape.2, self.out_shape.2);
-        //scalar_op_3d_inplace(bias_grad_ptr, self.lr, 2, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-        //element_op_3d_inplace(weight_ptr, weight_grad_ptr, 1, self.in_shape.0, self.in_shape.2, self.out_shape.2);
-        //element_op_3d_inplace(bias_ptr, bias_grad_ptr, 1, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-        ////println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
         gradient_desc_3d(
             lr, l2,
-            weight_ptr, weight_grad_ptr, weight_velocity_ptr, weight_momentum_ptr,
-            self.in_shape.0, self.in_shape.2, self.out_shape.2,
-            bias_ptr, bias_grad_ptr, bias_velocity_ptr, bias_momentum_ptr,
-            self.out_shape.0, self.out_shape.1, self.out_shape.2,
-            only_bias, false, self.batch_size, optimizer_type, alpha, beta
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.2, self.io_ptrs.out_shape.2,
+            self.parameter_ptrs.biases_ptr, self.parameter_ptrs.bias_grad_ptr, 
+            self.parameter_ptrs.bias_vel_ptr, self.parameter_ptrs.bias_moment_ptr,
+            self.io_ptrs.out_shape.0, self.io_ptrs.out_shape.1, self.io_ptrs.out_shape.2,
+            self.use_bias, false, self.batch_size, optimizer_type, alpha, beta
         );
 
         self.batch_size = 0.0;
@@ -279,7 +267,7 @@ impl LayerCuda for DenseCuda
         }
     }
 
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: DENSE | Layer name: {:?}", self.name);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
