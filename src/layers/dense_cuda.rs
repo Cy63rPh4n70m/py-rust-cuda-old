@@ -3,53 +3,23 @@
 use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use serde_json::de::IoRead;
 
 use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr}};
 
-#[derive(Serialize, Deserialize)]
+use super::layer_cuda::{AllocationStatus, IOPtrs, MiscData, ParameterPtrs, WeightTensors};
+
 pub struct DenseCuda
 {
     pub name: String,
-    pub in_shape: (usize, usize, usize),
-    pub out_shape: (usize, usize, usize),
-    pub n_out: usize,
-
-    pub input: ArrayD<f32>,
-    pub weights: ArrayD<f32>,
-    pub biases: ArrayD<f32>,
-
-    //pub io_ptrs: HashMap<String, String>,
-    pub output_traverse_ptr: String,
-
-    pub biases_ptr: String,
-    pub bias_gradients_ptr: String,
-    pub bias_velocity_ptr: String,
-    pub bias_momentum_ptr: String,
-    pub weight_ptr: String,
-    pub weight_grad_ptr: String,
-    pub weight_velocity_ptr: String,
-    pub weight_momentum_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-
-    pub backward_count: String,
-    pub backward_count_weight_prev: String,
-    pub backward_count_in_prev: String,
-
-    pub batch_size: f32,
-    pub count: u128,
-
-    pub weight_ptr_allocated: bool, 
-    pub bias_ptr_allocated: bool, 
-    pub weight_array_allocated: bool,
-    pub bias_array_allocated: bool,
     pub use_bias: bool,
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
-    pub zero_weight_grad: bool
+    
+    pub io_ptrs: IOPtrs,
+    pub parameter_ptrs: ParameterPtrs,
+    pub allocation_status: AllocationStatus,
+    pub misc_data: MiscData,
+    pub weight_tensors: WeightTensors
+
 }
 impl DenseCuda
 {
@@ -57,54 +27,17 @@ impl DenseCuda
     pub fn new(
         n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, name: &str
     ) -> Self
-    {
-        let weights: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
-        let biases: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
-        
+    {        
         return Self
         {
             //io_ptrs,
             name: name.to_string(),
-            input: ArrayD::zeros(IxDyn(&[0])),
-            weights,
-            weight_velocity_ptr: "".to_string(),
-            weight_momentum_ptr: "".to_string(),
-            
-            output_traverse_ptr: String::from("none"),
-
-            biases,
-            biases_ptr: "".to_string(),
-            bias_gradients_ptr: "".to_string(),
-            bias_velocity_ptr: "".to_string(),
-            bias_momentum_ptr: "".to_string(),
-            weight_ptr: "".to_string(),
-            weight_grad_ptr: "".to_string(),
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
-            //broadcast_array_ptr: "".to_string(),
-            //output_ptr_t: "".to_string(),
-            in_shape: (batch, rows, n_in),
-            out_shape: (batch, rows, n_out),
-            n_out,
-
-            backward_count: String::from("none"),
-            backward_count_weight_prev: String::from("none"),
-            backward_count_in_prev: String::from("none"),
-
-            batch_size: 0.0,
-            count: 0,
-            weight_ptr_allocated: false, 
-            bias_ptr_allocated: false,
-            weight_array_allocated: false,
-            bias_array_allocated: false,
-            //grads_ptr_allocated: false,
             use_bias,
-            zero_input_grad: false,
-            zero_output: true,
-            zero_weight_grad: false
+            io_ptrs: IOPtrs::new((batch, rows, n_in), (batch, rows, n_out)),
+            parameter_ptrs: ParameterPtrs::new(),
+            allocation_status: AllocationStatus::new(),
+            misc_data: MiscData::new(),
+            weight_tensors: WeightTensors::new()
         }
     }
 
