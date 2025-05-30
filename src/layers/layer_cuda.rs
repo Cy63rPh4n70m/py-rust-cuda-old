@@ -2,14 +2,14 @@ use std::{os::raw::c_void, process::Stdio};
 
 use crate::neuralnet::TraversePtrs;
 
-trait LayerCuda
+pub trait LayerCuda
 {
     fn forward(
-        &mut self, inputs: *mut c_void, weights: *mut c_void, use_dropout: bool
-    ) -> *mut c_void;
+        &mut self, inputs: *mut TraversePtrs, weights: *mut TraversePtrs, use_dropout: bool
+    ) -> *mut TraversePtrs;
 
     fn backward(&mut self);
-    fn update_params(&mut self);
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32, only_bias: bool);
     fn details(&mut self);
     fn get_param_count(&self) -> f32;
     fn move_ptrs_to_arrays(&mut self);
