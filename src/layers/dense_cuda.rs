@@ -7,7 +7,7 @@ use serde_json::de::IoRead;
 
 use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_trav_in_ptrs, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
+use super::layer_cuda::{LayerCuda, AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
 pub struct DenseCuda
 {
@@ -40,9 +40,12 @@ impl DenseCuda
             weight_tensors: WeightTensors::new()
         }
     }
-    
+}
+
+impl LayerCuda for DenseCuda
+{
     // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs) -> *mut TraversePtrs
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         let batch: usize = self.io_ptrs.in_shape.0;
         let rows: usize = self.io_ptrs.in_shape.1;
@@ -140,18 +143,8 @@ impl DenseCuda
 
     }
 
-    pub fn backward(&mut self)
+    fn backward(&mut self)
     {
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        //let weight_t_ptr: *mut f32 = string_to_ptr(&self.weight_t_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        let output_grad_ptr: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
-        let bias_grad_ptr: *mut f32 = string_to_ptr(&self.bias_gradients_ptr);
-        //let output_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get_mut("output").unwrap());
-        //let original_grads: *mut f32 = ptr.get_ptr();
 
         ////println!("=========================================================");
         ////println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
@@ -160,30 +153,36 @@ impl DenseCuda
 
         //let start: Instant = Instant::now();
         ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        if counter_is_zero(&self.backward_count_in_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = true;
         }
         
         ////println!("{:?}", self.backward_count_weight_prev);
-        if counter_is_zero(&self.backward_count_weight_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_weight_prev)
         {
-            self.zero_weight_grad = true;
+            self.allocation_status.zero_weight_grad = true;
         }
         
         matmul_add_bias_back(
-            input_grad_ptr, self.in_shape.0 as u32, self.in_shape.1 as u32, self.in_shape.2 as u32, 
-            weight_grad_ptr, self.in_shape.0 as u32, self.in_shape.2 as u32, self.out_shape.2 as u32, 
-            bias_grad_ptr, self.out_shape.0 as u32, self.out_shape.1 as u32, self.out_shape.2 as u32,
-            output_grad_ptr, 
-            input_ptr,
-            weight_ptr,
+            self.io_ptrs.input_grad_ptr, 
+            self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.1 as u32, 
+            self.io_ptrs.in_shape.2 as u32, 
+            self.parameter_ptrs.weight_grad_ptr, 
+            self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.2 as u32, 
+            self.io_ptrs.out_shape.2 as u32, 
+            self.parameter_ptrs.bias_grad_ptr, 
+            self.io_ptrs.out_shape.0 as u32, self.io_ptrs.out_shape.1 as u32, 
+            self.io_ptrs.out_shape.2 as u32,
+            self.io_ptrs.output_grad_ptr, 
+            self.io_ptrs.input_ptr,
+            self.parameter_ptrs.weight_ptr,
             self.use_bias,
-            self.zero_input_grad,
-            self.zero_weight_grad
+            self.allocation_status.zero_input_grad,
+            self.allocation_status.zero_weight_grad
         );
 
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
 
         self.batch_size += 1.0;
 
