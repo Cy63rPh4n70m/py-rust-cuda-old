@@ -239,32 +239,6 @@ impl LayerCuda for DenseCuda
         );
 
         self.batch_size = 0.0;
-
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
-    }
-
-    pub fn zero_io(&mut self, io_ptr_name: &String)
-    {
-        //let io_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get(io_ptr_name).unwrap());
-
-        if io_ptr_name.contains("input")
-        {
-            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.1, self.in_shape.2);
-            self.zero_input_grad = true;
-        }
-        
-        if io_ptr_name.contains("output")
-        {
-            //zeroes_3d_inplace(io_ptr, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-            self.zero_output = true;
-        }
-        
-        if io_ptr_name.contains("weight")
-        {
-            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.2, self.out_shape.2);
-            self.zero_weight_grad = true;
-        }
     }
 
     fn details(&self)
