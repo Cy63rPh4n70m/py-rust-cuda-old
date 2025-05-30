@@ -291,28 +291,6 @@ impl LayerCuda for DenseCuda
             self.bias_array_allocated = false;
         }
 
-        /*
-        free_cuda_array(string_to_ptr(&self.output_traverse_ptr));
-
-        free_cuda_array(string_to_ptr(&self.biases_ptr));
-        free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-        free_cuda_array(string_to_ptr(&self.bias_velocity_ptr));
-        free_cuda_array(string_to_ptr(&self.bias_momentum_ptr));
-        free_cuda_array(string_to_ptr(&self.weight_ptr));
-        free_cuda_array(string_to_ptr(&self.weight_grad_ptr));
-        free_cuda_array(string_to_ptr(&self.weight_velocity_ptr));
-        free_cuda_array(string_to_ptr(&self.weight_momentum_ptr));
-        free_cuda_array(string_to_ptr(&self.output_ptr));
-        free_cuda_array(string_to_ptr(&self.output_grad_ptr));
-
-        free_cuda_array(string_to_ptr(&self.input_ptr));
-        free_cuda_array(string_to_ptr(&self.input_grad_ptr));
-
-        free_cuda_array(string_to_ptr(&self.backward_count));
-        free_cuda_array(string_to_ptr(&self.backward_count_weight_prev));
-        free_cuda_array(string_to_ptr(&self.backward_count_in_prev));
-        */
-
         self.weight_ptr_allocated = false;
         self.bias_ptr_allocated = false;
     }
