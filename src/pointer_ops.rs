@@ -281,30 +281,33 @@ pub fn counter_is_zero(backward_pass_count: &String) -> bool
     }
 }
 
-pub unsafe fn init_trav_in_ptrs(
+pub fn init_trav_in_ptrs(
     trav_in_ptrs: &*mut TraversePtrs, backward_count: &mut *mut usize,
-    backward_count_prev: &mut *mut usize,
+    backward_count_in_prev: &mut *mut usize,
     input_ptr: &mut *mut f32, input_grad_ptr: &mut *mut f32, 
     output_ptr: &mut *mut f32, output_grad_ptr: &mut *mut f32,
     output_traverse_ptr: &mut *mut TraversePtrs,
     output_len: usize
 )
 {
-    *backward_count = Box::into_raw(Box::new(0_usize));
+    unsafe
+    {
+        *backward_count = Box::into_raw(Box::new(0_usize));
 
-    *backward_count_prev = (**trav_in_ptrs).backward_pass_count;
-    *input_ptr = (**trav_in_ptrs).ptr;
-    *input_grad_ptr = (**trav_in_ptrs).grad_ptr;
+        *backward_count_in_prev = (**trav_in_ptrs).backward_pass_count;
+        *input_ptr = (**trav_in_ptrs).ptr;
+        *input_grad_ptr = (**trav_in_ptrs).grad_ptr;
 
-    // make output ptrs and the traverse pointer for next layer/s
-    *output_ptr = new_cuda_array(output_len as u32);
-    *output_grad_ptr = new_cuda_array(output_len as u32);
+        // make output ptrs and the traverse pointer for next layer/s
+        *output_ptr = new_cuda_array(output_len as u32);
+        *output_grad_ptr = new_cuda_array(output_len as u32);
 
-    *output_traverse_ptr = Box::into_raw(Box::new({
-        TraversePtrs {
-            ptr: *output_ptr,
-            grad_ptr: *output_grad_ptr,
-            backward_pass_count: *backward_count
-        }
-    }));
+        *output_traverse_ptr = Box::into_raw(Box::new({
+            TraversePtrs {
+                ptr: *output_ptr,
+                grad_ptr: *output_grad_ptr,
+                backward_pass_count: *backward_count
+            }
+        }));
+    }
 }
