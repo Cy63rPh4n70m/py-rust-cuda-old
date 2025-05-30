@@ -5,7 +5,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::de::IoRead;
 
-use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_trav_in_ptrs, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
+use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, cuda_ptr_to_vec, get_traverse_str_ptr, increment_counter, init_trav_in_ptrs, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{LayerCuda, AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
@@ -271,33 +271,14 @@ impl LayerCuda for DenseCuda
 
     fn move_ptrs_to_arrays(&mut self)
     {
-        if !bias_only
-        {
-            self.weights = cuda_ptr_to_array(string_to_ptr(&self.weight_ptr), &[self.in_shape.0, self.in_shape.2, self.out_shape.2]);
-        }
-        else
-        {
-            self.weights = ArrayD::zeros(IxDyn(&[0]));
-            self.weight_array_allocated = false;
-        }
-
-        if self.use_bias
-        {
-            self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), 
-                &[self.out_shape.0, self.out_shape.1, self.out_shape.2]);
-        }
-        else
-        {
-            self.bias_array_allocated = false;
-        }
-
-        self.weight_ptr_allocated = false;
-        self.bias_ptr_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.weight_ptr_allocated = true;
-        self.bias_ptr_allocated = true;
+        self.weight_tensors.weight = cuda_ptr_to_vec(
+            self.parameter_ptrs.weight_ptr, 
+            self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.2 * self.io_ptrs.out_shape.2
+        );
+        
+        self.weight_tensors.biases = cuda_ptr_to_vec(
+            self.parameter_ptrs.biases_ptr, 
+            self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2
+        );
     }
 }
