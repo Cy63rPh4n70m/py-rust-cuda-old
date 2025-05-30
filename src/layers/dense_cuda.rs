@@ -269,7 +269,7 @@ impl LayerCuda for DenseCuda
         return count
     }
 
-    pub fn move_ptrs_to_arrays(&mut self, bias_only: bool)
+    fn move_ptrs_to_arrays(&mut self)
     {
         if !bias_only
         {
