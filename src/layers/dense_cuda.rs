@@ -1,11 +1,11 @@
 
 
-use ndarray::{ArrayD, IxDyn};
-use rand::Rng;
-use serde::{Deserialize, Serialize};
-use serde_json::de::IoRead;
-
-use crate::{cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, cuda_ptr_to_vec, get_traverse_str_ptr, increment_counter, init_trav_in_ptrs, new_cuda_ptr_str, ptr_to_string, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
+use crate::{
+    cuda_bridge::{gradient_desc_3d, matmul_add_bias_back, 
+        matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, 
+        neuralnet::TraversePtrs, pointer_ops::{counter_is_zero, cuda_ptr_to_vec, 
+            increment_counter, init_trav_in_ptrs, 
+            set_zero_counter, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{LayerCuda, AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
