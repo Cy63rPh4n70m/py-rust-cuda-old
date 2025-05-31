@@ -1,10 +1,10 @@
 use std::process::exit;
 
-use ndarray::{ArrayD, IxDyn};
-use rand::Rng;
-use serde::{Deserialize, Serialize};
-
-use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, gradient_desc_3d, new_cuda_array, zeroes_3d_inplace}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, cuda_ptr_to_vec, increment_counter, init_layer_connections, init_trav_in_ptrs, new_cuda_ptr_str, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
+use crate::{cuda_bridge::{conv2d_backward, 
+    conv2d_forward, gradient_desc_3d, new_cuda_array,
+     zeroes_3d_inplace}, math_functions::random_float_vec, 
+     neuralnet::TraversePtrs, pointer_ops::{counter_is_zero, cuda_ptr_to_vec, 
+         increment_counter, init_trav_in_ptrs, set_zero_counter, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
@@ -71,7 +71,7 @@ impl Conv2dCuda
 impl LayerCuda for Conv2dCuda
 {
     // supports batch matrix multiplication unlike cpu
-    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
         let batch: usize = self.io_ptrs.in_shape.0;
