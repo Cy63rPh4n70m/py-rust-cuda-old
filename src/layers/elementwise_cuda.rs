@@ -20,6 +20,7 @@ pub struct ElementwiseCuda
     pub dropout_rate: f32,
 
     pub op: u32,
+    pub range: f32
     pub activation_fn_id: i32,
     pub activation_scale: f32,
 
@@ -37,53 +38,23 @@ impl ElementwiseCuda
     {
         return Self
         {
-            weights,
-            weight_shift: 0.0,
-            weight_ptr: "".to_string(),
-            weight_grad_ptr: "".to_string(),
-            weight_velocity_ptr: "".to_string(),
-            weight_momentum_ptr: "".to_string(),
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
+            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
+            parameter_ptrs: ParameterPtrs::new(),
+            allocation_status: AllocationStatus::new(),
+            weight_tensors: WeightTensors::new(),
 
-            dropout_mask_ptr: "".to_string(),
-            rand_state_v_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-            backward_count_in_prev: String::from("none"),
-            backward_count_weight_prev: String::from("none"),
-            backward_count: String::from("none"),
-            //dropout_result_ptr: "".to_string(),
+            dropout_mask_ptr: std::ptr::null_mut(),
+            rand_state_v_ptr: std::ptr::null_mut(),
 
             dropout_rate,
             op,
             activation_fn_id,
             activation_scale,
 
-            //biases,
-            //biases_ptr: "".to_string(),
-            //bias_gradients_ptr: "".to_string(),
-            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
-            //broadcast_array_ptr: "".to_string(),
-
-            //activation,
-            //result_ptr_t: "".to_string(),
             range,
-            shape: (batch, rows, cols),
-            zero_output: true,
-            zero_input_grad: false,
-            zero_weight_grad: false,
             //out_shape,
             batch_size: 0.0,
             count: 0,
-            weight_ptr_allocated: false, 
-            in_out_ptrs_allocated: false,
-            bias_ptr_allocated: false,
-            weight_array_allocated: false,
-            bias_array_allocated: false,
-            //grads_ptr_allocated: false,
         }
     }
 
