@@ -177,51 +177,27 @@ impl LayerCuda for Conv2dCuda
 
     fn backward(&mut self)
     {
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
-        let filter_ptr: *mut f32 = string_to_ptr(&self.filters_ptr);
-        //let weight_t_ptr: *mut f32 = string_to_ptr(&self.weight_t_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        let input_grad_count_ptr: *mut f32 = string_to_ptr(&self.input_grads_count_ptr);
-        let filter_grad_ptr: *mut f32 = string_to_ptr(&self.filter_gradients_ptr);
-        let filter_grad_count_ptr: *mut f32 = string_to_ptr(&self.filters_grad_count_ptr);
-        let bias_grad_ptr: *mut f32 = string_to_ptr(&self.bias_gradients_ptr);
-        //let result_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get_mut("output").unwrap());
-        let original_grads: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-
-        //println!("=========================================================");
-        //println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        //println!("\nweights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        //println!("\nmatmul result: {:?}", cuda_ptr_to_array(result_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-
-        //let start: Instant = Instant::now();
-
-        // array is always stored as 1d
-        // bias gradients
-        //println!("{:?}", cuda_ptr_to_array(original_grads, &[self.n_filters, self.stride_count_y, self.stride_count_x]));
-        //element_op_3d_inplace(bias_grad_ptr, original_grads, 0, self.n_filters, self.stride_count_y, self.stride_count_x);
-        //if self.zero_input_grad
-        //{
-        //    zeroes_3d_inplace(input_grad_ptr, self.in_shape.0, self.in_shape.1, self.in_shape.2);
-        //}
-
-        if counter_is_zero(&self.backward_count_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            zeroes_3d_inplace(input_grad_ptr, self.in_shape.0, self.in_shape.1, self.in_shape.2);
+            zeroes_3d_inplace(
+                self.io_ptrs.input_grad_ptr, 
+                self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
+            );
         }
         
         conv2d_backward(
-            input_ptr, input_grad_ptr, input_grad_count_ptr,
-            filter_ptr, filter_grad_ptr, filter_grad_count_ptr,
-            original_grads, bias_grad_ptr,
-            self.in_shape.0 as u32, self.in_shape.1 as u32, self.in_shape.2 as u32, 
-            self.out_shape.0 as u32, self.out_shape.1 as u32, self.out_shape.2 as u32, 
+            self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr, self.input_grads_count_ptr,
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
+            self.filters_grad_count_ptr,
+            self.io_ptrs.output_grad_ptr, self.parameter_ptrs.bias_grad_ptr,
+            self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.1 as u32, self.io_ptrs.in_shape.2 as u32, 
+            self.io_ptrs.out_shape.0 as u32, self.io_ptrs.out_shape.1 as u32, self.io_ptrs.out_shape.2 as u32, 
             self.filter_dim as u32, self.strides as u32
         );
 
         //println!("{:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
         //println!("{:?}", cuda_ptr_to_array(filter_grad_ptr, &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]));
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
         //exit(1);
         self.batch_size += 1.0;
         //let end = start.elapsed();
@@ -236,34 +212,9 @@ impl LayerCuda for Conv2dCuda
         //exit(1);      
         // calculate summed respect to bias
         // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.in_shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
 
-    pub fn get_weight_grads_ptr(&mut self) -> String
-    {
-        return self.filter_gradients_ptr.clone();
-    }
-
-    pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32, only_bias: bool)
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
         let filter_ptr: *mut f32 = string_to_ptr(&self.filters_ptr);
         let bias_ptr: *mut f32 = string_to_ptr(&self.biases_ptr);
