@@ -14,10 +14,8 @@ pub struct ElementwiseCuda
     pub allocation_status: AllocationStatus,
     pub weight_tensors: WeightTensors,
     
-    pub dropout_mask_ptr: String,
-    pub rand_state_v_ptr: String,
-
-    pub output_traverse_ptr: String,
+    pub dropout_mask_ptr: *mut f32,
+    pub rand_state_v_ptr: *mut c_void,
 
     pub dropout_rate: f32,
 
@@ -37,8 +35,6 @@ impl ElementwiseCuda
         activation_scale: f32
     ) -> Self
     {
-        let weights: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
-
         return Self
         {
             weights,
