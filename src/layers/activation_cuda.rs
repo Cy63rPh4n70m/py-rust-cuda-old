@@ -1,45 +1,15 @@
-
-use serde::{Deserialize, Serialize};
-
 use crate::{cuda_bridge::{activation3d_cuda, activation3d_cuda_backward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, set_zero_counter, string_to_ptr}};
 
-#[derive(Serialize, Deserialize)]
+use super::layer_cuda::{AllocationStatus, IOPtrs};
+
 pub struct ActivationCuda
 {
-    //pub io_ptrs: HashMap<String, String>,
-
-    //pub a: ArrayD<f32>,
-    //pub a_ptr: String,
-    //pub a_grads_ptr: String,
-    //pub a_vel_ptr: String,
-    //pub b: ArrayD<f32>,
-    //pub b_ptr: String,
-    //pub b_grads_ptr: String,
-    //pub b_vel_ptr: String,
-
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub output_traverse_ptr: String,
+    pub io_ptrs: IOPtrs,
+    pub allocation_status: AllocationStatus,
 
     pub scale: f32,
-
     pub activation_str: String,
-    //pub lr: f32,
-    //pub l2: f32,
-    pub shape: (usize, usize, usize),
     pub batch_size: f32,
-
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
-
-    pub ptrs_allocated: bool,
-    pub arrays_allocated: bool
 }
 impl ActivationCuda
 {
