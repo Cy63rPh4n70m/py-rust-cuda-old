@@ -1,9 +1,13 @@
 use std::{os::raw::c_void, process::exit};
 
-use ndarray::{ArrayD, IxDyn};
-use rand::Rng;
-
-use crate::{cuda_bridge::{elementwise_dropout_backward, elementwise_dropout_forward, gradient_desc_3d, init_random_states, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, init_trav_in_ptrs, new_cuda_ptr_str, ptr_to_string, ptr_to_string_void, set_zero_counter, string_to_ptr, string_to_ptr_void, vec_to_cuda_ptr}};
+use crate::{
+    cuda_bridge::{
+        elementwise_dropout_backward, elementwise_dropout_forward, 
+        gradient_desc_3d, init_random_states, new_cuda_array}, 
+        math_functions::random_float_vec, neuralnet::TraversePtrs, 
+        pointer_ops::{counter_is_zero, 
+            cuda_ptr_to_vec, increment_counter, init_trav_in_ptrs, 
+            set_zero_counter, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
