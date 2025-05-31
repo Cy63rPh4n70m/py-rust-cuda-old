@@ -16,7 +16,7 @@ pub struct TraversePtrs
 {
     pub ptr: *mut f32,
     pub grad_ptr: *mut f32,
-    pub backward_pass_count: String // a pointer to the previous layer's counter
+    pub backward_pass_count: *mut usize // a pointer to the previous layer's counter
 }
 
 #[derive(Serialize, Deserialize)]

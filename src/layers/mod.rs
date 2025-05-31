@@ -1,6 +1,5 @@
 pub mod layer_cuda;
 pub mod dense_cuda;
-pub mod cuda_layer_enum;
 pub mod activation_cuda;
 pub mod embedding_cuda;
 pub mod softmax_cuda;

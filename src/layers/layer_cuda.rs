@@ -2,16 +2,16 @@ use std::{os::raw::c_void, process::Stdio};
 
 use crate::neuralnet::TraversePtrs;
 
-trait LayerCuda
+pub trait LayerCuda
 {
     fn forward(
-        &mut self, inputs: *mut c_void, weights: *mut c_void, use_dropout: bool
-    ) -> *mut c_void;
+        &mut self, inputs: *mut TraversePtrs, weights: *mut TraversePtrs, use_dropout: bool
+    ) -> *mut TraversePtrs;
 
     fn backward(&mut self);
-    fn update_params(&mut self);
-    fn details(&mut self);
-    fn get_param_count(&self) -> f32;
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32);
+    fn details(&self);
+    fn get_param_count(&self) -> usize;
     fn move_ptrs_to_arrays(&mut self);
 }
 
@@ -27,7 +27,10 @@ pub struct IOPtrs
     pub output_ptr: *mut f32,
     pub output_grad_ptr: *mut f32,
 
-    pub output_traverse_ptr: Option<Box<TraversePtrs>>,
+    pub output_traverse_ptr: *mut TraversePtrs,
+    pub backward_count: *mut usize,
+    pub backward_count_weight_prev: *mut usize,
+    pub backward_count_in_prev: *mut usize,
 }
 impl IOPtrs
 {
@@ -40,7 +43,10 @@ impl IOPtrs
             input_grad_ptr: std::ptr::null_mut(),
             output_ptr: std::ptr::null_mut(),
             output_grad_ptr: std::ptr::null_mut(),
-            output_traverse_ptr: None,
+            output_traverse_ptr: std::ptr::null_mut(),
+            backward_count: std::ptr::null_mut(),
+            backward_count_weight_prev: std::ptr::null_mut(),
+            backward_count_in_prev: std::ptr::null_mut(),
         }
     }
 }
@@ -79,10 +85,8 @@ impl ParameterPtrs
 
 pub struct AllocationStatus
 {
-    pub weight_ptr_allocated: bool, 
-    pub bias_ptr_allocated: bool, 
-    pub weight_array_allocated: bool,
-    pub bias_array_allocated: bool,
+    pub ptrs_allocated: bool, 
+    pub arrays_allocated: bool,
         
     pub zero_output: bool,
     pub zero_input_grad: bool,
@@ -94,39 +98,12 @@ impl AllocationStatus
     {
         return Self
         {
-            weight_ptr_allocated: false,
-            bias_ptr_allocated: false,
-            weight_array_allocated: false,
-            bias_array_allocated: false,
+            ptrs_allocated: false,
+            arrays_allocated: false,
 
             zero_output: true,
             zero_input_grad: false,
             zero_weight_grad: false
-        }
-    }
-}
-
-pub struct MiscData
-{
-    pub backward_count: Option<Box<f32>>,
-    pub backward_count_weight_prev: Option<Box<f32>>,
-    pub backward_count_in_prev: Option<Box<f32>>,
-
-    pub batch_size: f32,
-    pub count: u128,
-}
-impl MiscData
-{
-    pub fn new(batch_size: f32) -> Self
-    {
-        return Self
-        {
-            backward_count: None,
-            backward_count_weight_prev: None,
-            backward_count_in_prev: None,
-
-            batch_size,
-            count: 0
         }
     }
 }

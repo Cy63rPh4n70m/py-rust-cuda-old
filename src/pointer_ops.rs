@@ -80,6 +80,13 @@ pub fn array_to_cuda_ptr(array: &mut ArrayD<f32>) -> *mut f32
     return cuda_ptr;
 }
 
+pub fn vec_to_cuda_ptr(array: &mut Vec<f32>) -> *mut f32
+{
+    let ptr: *mut f32 = array.as_mut_ptr();
+    let cuda_ptr: *mut f32 = to_cuda(ptr, array.len() as u32);
+    return cuda_ptr;
+}
+
 pub fn new_cpu_ptr_str(shape: &[usize]) -> String
 {
     let mut length: usize = 1;
@@ -124,17 +131,12 @@ pub fn cuda_ptr_to_array(ptr: *mut f32, shape: &[usize]) -> ArrayD<f32>
     }
 }
 
-pub fn cuda_ptr_to_vec(ptr: *mut f32, shape: &[usize]) -> Vec<f32>
+pub fn cuda_ptr_to_vec(ptr: *mut f32, length: usize) -> Vec<f32>
 {
-    unsafe {
-        let mut length: u32 = 1;
-        for i in 0..shape.len()
-        {
-            length *= shape[i] as u32;
-        }
-
-        let result: *mut f32 = to_cpu(ptr, length);
-        let result_slice: &mut [f32] = std::slice::from_raw_parts_mut(result, length as usize);
+    unsafe 
+    {
+        let result: *mut f32 = to_cpu(ptr, length as u32);
+        let result_slice: &mut [f32] = std::slice::from_raw_parts_mut(result, length);
         let result_vec: Vec<f32> = result_slice.to_vec();
         
         free_cpu_array(result);
@@ -239,26 +241,23 @@ pub fn create_counting_ptr_str() -> String
     return ptr_to_string(raw_box_ptr);
 }
 
-pub fn increment_counter(backward_pass_count: &String)
+pub fn increment_counter(backward_pass_count: *mut usize)
 {
-    let backward_pass_count: *mut f32 = string_to_ptr(backward_pass_count);
-    unsafe { *backward_pass_count += 1.0 }
+    unsafe { *backward_pass_count += 1 }
 }
 
-pub fn set_zero_counter(backward_pass_count: &String)
+pub fn set_zero_counter(backward_pass_count: *mut usize)
 {
-    let backward_pass_count: *mut f32 = string_to_ptr(backward_pass_count);
-    unsafe { *backward_pass_count = 0.0 }
+    unsafe { *backward_pass_count = 0 }
 }
 
-pub fn counter_is_zero(backward_pass_count: &String) -> bool
+pub fn counter_is_zero(backward_pass_count: *mut usize) -> bool
 {
-    if !backward_pass_count.contains("none")
+    if !backward_pass_count.is_null()
     {
-        let backward_pass_count: *mut f32 = string_to_ptr(backward_pass_count);
         unsafe 
         { 
-            if *backward_pass_count == 0.0 
+            if *backward_pass_count == 0
             {
                 return true;
             }
@@ -274,34 +273,33 @@ pub fn counter_is_zero(backward_pass_count: &String) -> bool
     }
 }
 
-pub fn init_layer_connections(
-    backward_count: &mut String, str_ptr_in: &String, 
-    backward_count_prev: &mut String,
-    input_ptr: &mut String, input_grad_ptr: &mut String, 
-    output_ptr: &mut String, output_grad_ptr: &mut String,
-    output_traverse_ptr: &mut String,
-    output_shape: &[usize])
+pub fn init_trav_in_ptrs(
+    trav_in_ptrs: &*mut TraversePtrs, backward_count: &mut *mut usize,
+    backward_count_in_prev: &mut *mut usize,
+    input_ptr: &mut *mut f32, input_grad_ptr: &mut *mut f32, 
+    output_ptr: &mut *mut f32, output_grad_ptr: &mut *mut f32,
+    output_traverse_ptr: &mut *mut TraversePtrs,
+    output_len: usize
+)
 {
-    *backward_count = create_counting_ptr_str();
+    unsafe
+    {
+        *backward_count = Box::into_raw(Box::new(0_usize));
 
-    // set input ptrs
-    let (input_ptr_float, 
-         input_grad_ptr_float, 
-         backward_count_prev0) = 
-        get_traverse_str_ptr(str_ptr_in);
+        *backward_count_in_prev = (**trav_in_ptrs).backward_pass_count;
+        *input_ptr = (**trav_in_ptrs).ptr;
+        *input_grad_ptr = (**trav_in_ptrs).grad_ptr;
 
-    *backward_count_prev = backward_count_prev0;
-    *input_ptr = ptr_to_string(input_ptr_float);
-    *input_grad_ptr = ptr_to_string(input_grad_ptr_float);
+        // make output ptrs and the traverse pointer for next layer/s
+        *output_ptr = new_cuda_array(output_len as u32);
+        *output_grad_ptr = new_cuda_array(output_len as u32);
 
-    // make output ptrs and the traverse pointer for next layer/s
-    *output_ptr = new_cuda_ptr_str(output_shape);
-    *output_grad_ptr = new_cuda_ptr_str(output_shape);
-
-    // make the output traverse ptr to return
-    *output_traverse_ptr = new_traverse_str_ptr(
-        string_to_ptr(output_ptr), 
-        string_to_ptr(output_grad_ptr),
-        backward_count.clone()
-    );
+        *output_traverse_ptr = Box::into_raw(Box::new({
+            TraversePtrs {
+                ptr: *output_ptr,
+                grad_ptr: *output_grad_ptr,
+                backward_pass_count: *backward_count
+            }
+        }));
+    }
 }
