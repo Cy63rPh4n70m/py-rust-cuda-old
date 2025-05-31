@@ -20,7 +20,7 @@ pub struct ElementwiseCuda
     pub dropout_rate: f32,
 
     pub op: u32,
-    pub range: f32
+    pub range: f32,
     pub activation_fn_id: i32,
     pub activation_scale: f32,
 
