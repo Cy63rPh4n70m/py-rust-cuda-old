@@ -145,73 +145,29 @@ impl LayerCuda for ElementwiseCuda
 
     }
 
-    pub fn backward(&mut self, use_dropout: bool)
+    fn backward(&mut self, use_dropout: bool)
     {
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        //let weight_t_ptr: *mut f32 = string_to_ptr(&self.weight_t_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
-        //let weight_grad_temp_ptr: *mut f32 = string_to_ptr(&self.weight_gradients_temp_ptr);
-        let original_grads: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-
-        let mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-
-        ////println!("=========================================================");
-        ////println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("\nweights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("\nmatmul result: {:?}", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-
-        // calculate gradient for bias
-        //copy_cuda_to_cuda(
-        //    bias_grad_ptr, original_grads, 
-        //    &[self.shape.0, self.shape.1, self.shape.2]
-        //);
-
-        /*
-        // calculate gradient for weights (broadcast multiplying original_grads along axis)
-        element_op_3d_ret(
-            weight_grad_temp_ptr, 
-            original_grads, input_ptr, 2, 
-            self.shape.0, self.shape.1, self.shape.2
-        );
-        element_op_3d_inplace(weight_grad_ptr, weight_grad_temp_ptr, 0, self.shape.0, self.shape.1, self.shape.2);
-
-        //activation3d_cuda_backward(
-        //    weight_grad_ptr, weight_shifted_ptr, weight_act_grad_ptr, 
-        //    self.shape.0 as u32, self.shape.1 as u32, self.shape.2 as u32, 
-        //    "softplus"
-        //);
-        
-        // calculate gradient for input (elementwise multiplication followed by summation along axis)
-        element_op_3d_ret(
-            input_grad_ptr, 
-            original_grads, weight_ptr, 2, 
-            self.shape.0, self.shape.1, self.shape.2
-        );
-        */
-        ////println!("A");
-        if counter_is_zero(&self.backward_count_in_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = true;
         }
         
-        ////println!("{:?}", self.backward_count_weight_prev);
-        if counter_is_zero(&self.backward_count_weight_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_weight_prev)
         {
-            self.zero_weight_grad = true;
+            self.allocation_status.zero_weight_grad = true;
         }
 
         elementwise_dropout_backward(
-            original_grads, mask_ptr, 
-            input_ptr, weight_ptr, weight_grad_ptr, 
-            input_grad_ptr, use_dropout, self.activation_fn_id, self.activation_scale,
-            self.shape.0, self.shape.1, self.shape.2, self.op,
-            self.zero_input_grad, self.zero_weight_grad
+            self.io_ptrs.output_grad_ptr, self.dropout_mask_ptr, 
+            self.io_ptrs.input_ptr, self.parameter_ptrs.weight_ptr, 
+            self.parameter_ptrs.weight_grad_ptr, 
+            self.io_ptrs.input_grad_ptr, use_dropout, 
+            self.activation_fn_id, self.activation_scale,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
+            self.op, self.allocation_status.zero_input_grad, self.allocation_status.zero_weight_grad
         );
         
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
 
         self.batch_size += 1.0;
         ////println!("B");
@@ -228,26 +184,6 @@ impl LayerCuda for ElementwiseCuda
         //exit(1);      
         // calculate summed respect to bias
         // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
 
     pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
