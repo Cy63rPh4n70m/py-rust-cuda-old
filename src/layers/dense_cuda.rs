@@ -144,7 +144,7 @@ impl LayerCuda for DenseCuda
 
     }
 
-    fn backward(&mut self)
+    fn backward(&mut self, _use_dropout: bool)
     {
 
         ////println!("=========================================================");

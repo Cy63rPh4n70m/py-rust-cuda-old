@@ -175,7 +175,7 @@ impl LayerCuda for Conv2dCuda
         //exit(1);
     }
 
-    fn backward(&mut self)
+    fn backward(&mut self, _use_dropout: bool)
     {
         if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
