@@ -242,14 +242,17 @@ impl LayerCuda for ElementwiseCuda
         println!("Weights: \n{:?}", self.weight_tensors.weight);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
-        return self.shape.0 * self.shape.1 * self.shape.2;
+        return self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
-        self.weights = cuda_ptr_to_array(string_to_ptr(&self.weight_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
+        self.weight_tensors.weight = cuda_ptr_to_vec(
+            self.parameter_ptrs.weight_ptr, 
+            self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2
+        );
         //self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
         //free_cuda_array(string_to_ptr(&self.weight_ptr));
         //free_cuda_array(string_to_ptr(&self.biases_ptr));
@@ -259,16 +262,5 @@ impl LayerCuda for ElementwiseCuda
         //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
         //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
         //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-
-        self.weight_ptr_allocated = false;
-        self.bias_ptr_allocated = false;
-        self.in_out_ptrs_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.weight_ptr_allocated = true;
-        self.bias_ptr_allocated = true;
-        self.in_out_ptrs_allocated = true;
     }
 }
