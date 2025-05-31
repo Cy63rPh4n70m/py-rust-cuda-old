@@ -239,19 +239,19 @@ impl LayerCuda for Conv2dCuda
         //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: CONV_2D | Layer name: {:?}", self.name);
-        println!("Input shape: {:?}", self.in_shape);
-        println!("Output shape: {:?}", self.out_shape);
-        println!("Filters: \n{:?}", self.filters);
-        println!("Biases: \n{:?}", self.biases);
+        println!("Input shape: {:?}", self.io_ptrs.in_shape);
+        println!("Output shape: {:?}", self.io_ptrs.out_shape);
+        println!("Filters: \n{:?}", self.weight_tensors.weight);
+        println!("Biases: \n{:?}", self.weight_tensors.biases);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return self.n_filters * self.in_channels * self.filter_dim * self.filter_dim +
-               self.out_shape.0 * self.out_shape.1 * self.out_shape.2;
+               self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2;
     }
 
     pub fn move_ptrs_to_arrays(&mut self, bias_only: bool)
