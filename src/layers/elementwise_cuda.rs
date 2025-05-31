@@ -3,9 +3,9 @@ use std::{os::raw::c_void, process::exit};
 use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
 
-use crate::{cuda_bridge::{elementwise_dropout_backward, elementwise_dropout_forward, gradient_desc_3d, init_random_states}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, ptr_to_string_void, set_zero_counter, string_to_ptr, string_to_ptr_void}};
+use crate::{cuda_bridge::{elementwise_dropout_backward, elementwise_dropout_forward, gradient_desc_3d, init_random_states, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, init_trav_in_ptrs, new_cuda_ptr_str, ptr_to_string, ptr_to_string_void, set_zero_counter, string_to_ptr, string_to_ptr_void, vec_to_cuda_ptr}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
 pub struct ElementwiseCuda
 {
@@ -57,6 +57,7 @@ impl ElementwiseCuda
             count: 0,
         }
     }
+}
 
 impl LayerCuda for ElementwiseCuda
 {
@@ -186,23 +187,18 @@ impl LayerCuda for ElementwiseCuda
         // calculate bias gradients
     }
 
-    pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
-        let weight_velocity_ptr: *mut f32 = string_to_ptr(&self.weight_velocity_ptr);
-        let weight_momentum_ptr: *mut f32 = string_to_ptr(&self.weight_momentum_ptr);
-
-        //scalar_op_3d_inplace(weight_grad_ptr, self.lr, 2, self.shape.0, self.shape.2, self.out_shape.2);
-        //scalar_op_3d_inplace(bias_grad_ptr, self.lr, 2, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-        //element_op_3d_inplace(weight_ptr, weight_grad_ptr, 1, self.shape.0, self.shape.2, self.out_shape.2);
-        //element_op_3d_inplace(bias_ptr, bias_grad_ptr, 1, self.out_shape.0, self.out_shape.1, self.out_shape.2);
         gradient_desc_3d(
             lr, l2,
-            weight_ptr, weight_grad_ptr, weight_velocity_ptr, weight_momentum_ptr,
-            self.shape.0, self.shape.1, self.shape.2,
-            weight_ptr, weight_grad_ptr, weight_velocity_ptr, weight_momentum_ptr,
-            self.shape.0, self.shape.1, self.shape.2,
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2,
+            
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2,
+
             true, true, self.batch_size, optimizer_type, alpha, beta
         );
         
@@ -213,30 +209,7 @@ impl LayerCuda for ElementwiseCuda
         //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
-    pub fn zero_io(&mut self, io_ptr_name: &String)
-    {
-        //let io_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get(io_ptr_name).unwrap());
-
-        if io_ptr_name.contains("input")
-        {
-            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.1, self.in_shape.2);
-            self.zero_input_grad = true;
-        }
-        
-        if io_ptr_name.contains("output")
-        {
-            //zeroes_3d_inplace(io_ptr, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-            self.zero_output = true;
-        }
-        
-        if io_ptr_name.contains("weight")
-        {
-            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.2, self.out_shape.2);
-            self.zero_weight_grad = true;
-        }
-    }
-
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: ELEMENTWISE");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
