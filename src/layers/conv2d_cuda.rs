@@ -6,12 +6,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, gradient_desc_3d, zeroes_3d_inplace}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
-#[derive(Serialize, Deserialize)]
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
+
 pub struct Conv2dCuda
 {
     pub name: String,
-    pub in_shape: (usize, usize, usize),
-    pub out_shape: (usize, usize, usize),
     pub n_filters: usize,
     pub in_channels: usize,
     pub strides: usize, // move interval
@@ -19,47 +18,18 @@ pub struct Conv2dCuda
     pub stride_count_x: usize, // how many of these moves, output dimension
     pub filter_dim: usize,
 
-    pub input: ArrayD<f32>,
-    pub filters: ArrayD<f32>,
-    pub biases: ArrayD<f32>,
-
-    //pub io_ptrs: HashMap<String, String>,
-
-    pub filters_ptr: String,
-    pub filters_grad_count_ptr: String,
-    pub filter_gradients_ptr: String,
-    pub filter_velocity_ptr: String,
-    pub filter_momentum_ptr: String,
-    pub input_grads_count_ptr: String,
-    pub biases_ptr: String,
-    pub bias_gradients_ptr: String,
-    pub bias_velocity_ptr: String,
-    pub bias_momentum_ptr: String,
-
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub output_traverse_ptr: String,
+    pub io_ptrs: IOPtrs,
+    pub parameter_ptrs: ParameterPtrs,
+    pub allocation_status: AllocationStatus,
+    pub weight_tensors: WeightTensors,
     
-    //pub result_ptr: String,
-    //pub result_ptr_t: String,
+    pub filters_grad_count_ptr: *mut f32,
+    pub input_grads_count_ptr: *mut f32,
 
     pub batch_size: f32,
     pub count: u128,
 
-    pub filter_ptr_allocated: bool, 
-    pub bias_ptr_allocated: bool, 
-    pub filter_array_allocated: bool,
-    pub bias_array_allocated: bool,
-    //pub grads_ptr_allocated: bool,
     pub use_bias: bool,
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
     pub flatten: bool
 }
 impl Conv2dCuda
@@ -128,6 +98,9 @@ impl Conv2dCuda
         }
     }
 
+}
+impl LayerCuda for Conv2dCuda
+{
     // supports batch matrix multiplication unlike cpu
     pub fn forward(&mut self, str_ptr_in: String) -> String
     {
