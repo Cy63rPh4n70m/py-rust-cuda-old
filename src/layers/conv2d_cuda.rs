@@ -4,7 +4,7 @@ use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, gradient_desc_3d, zeroes_3d_inplace}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
+use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, gradient_desc_3d, new_cuda_array, zeroes_3d_inplace}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, increment_counter, init_layer_connections, init_trav_in_ptrs, new_cuda_ptr_str, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
@@ -41,7 +41,7 @@ impl Conv2dCuda
     ) -> Self
     {
         let in_shape: (usize, usize, usize) = (batch, rows, cols);
-        let out_shape: (usize, usize, usize) = (n_filters, ((rows - filter_dim) / strides) + 1, ((cols - filter_dim) / strides) + 1),
+        let out_shape: (usize, usize, usize) = (n_filters, ((rows - filter_dim) / strides) + 1, ((cols - filter_dim) / strides) + 1);
         return Self
         {
             name: name.to_string(),
@@ -71,16 +71,16 @@ impl Conv2dCuda
 impl LayerCuda for Conv2dCuda
 {
     // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, str_ptr_in: String) -> String
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
-        let batch: usize = self.in_shape.0;
-        let rows: usize = self.in_shape.1;
-        let cols: usize = self.in_shape.2;
+        let batch: usize = self.io_ptrs.in_shape.0;
+        let rows: usize = self.io_ptrs.in_shape.1;
+        let cols: usize = self.io_ptrs.in_shape.2;
 
         //println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
 
-        if !self.bias_ptr_allocated
+        if !self.allocation_status.ptrs_allocated
         {   
             self.stride_count_y = ((rows - self.filter_dim) / self.strides) + 1;
             self.stride_count_x = ((cols - self.filter_dim) / self.strides) + 1;
@@ -91,134 +91,78 @@ impl LayerCuda for Conv2dCuda
                 exit(1);
             }
 
-            // initialise biases and pointers
-            if !self.bias_array_allocated
-            {
-
-                self.biases = ArrayD::zeros(IxDyn(&[self.n_filters, self.stride_count_y, self.stride_count_x]));
-                self.bias_array_allocated = true
-            }
-
-            self.biases_ptr = array_to_cuda_ptr_str(&mut self.biases);
-            self.bias_gradients_ptr = new_cuda_ptr_str(&[self.n_filters, self.stride_count_y, self.stride_count_x]);
-            self.bias_velocity_ptr = new_cuda_ptr_str(&[self.n_filters, self.stride_count_y, self.stride_count_x]);
-            self.bias_momentum_ptr = new_cuda_ptr_str(&[self.n_filters, self.stride_count_y, self.stride_count_x]);
-
-            // initialise input pointer, set the input as the result pointer from previous layer
-            // tensor struct at this stage will contain the result ptr of the previous layer
-            ////////////////////////////////////////////////////////////////
-            //self.input_ptr = input.get_ptr_as_str();
-            //self.input_t_ptr = new_cuda_ptr_str(&[batch, cols, rows]);
-            //////////////////////////////////////////////////////////////////
-
-            // initialise the result tensor/pointer
-            //self.result_ptr = new_cuda_ptr_str(&[self.n_filters, self.stride_count_y, self.stride_count_x]);
-            //self.result_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
-            
-            //self.input_grads_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            self.input_grads_count_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            //self.output_grads_ptr = new_cuda_ptr_str(&[self.n_filters, self.stride_count_y, self.stride_count_x]);
-
-            //self.in_shape = (batch, rows, cols);
-            //self.out_shape = (self.n_filters, self.stride_count_y, self.stride_count_x);
             self.in_channels = batch;
 
-            self.bias_ptr_allocated = true;
+            let weight_len: u32 = (self.n_filters * self.in_channels * self.filter_dim * self.filter_dim) as u32;
+            let output_len: u32 = (self.n_filters * self.stride_count_y * self.stride_count_x) as u32;
 
-            if !self.filter_ptr_allocated
+            // initialise biases
+            if !self.allocation_status.arrays_allocated
             {
-                if !self.filter_array_allocated
-                {
-                    // initialise weights and weight pointer
-                    let range: f32 = 
-                        (6.0 / 
-                            ((batch * self.filter_dim * self.filter_dim + 
-                             self.n_filters * self.filter_dim * self.filter_dim) as f32)).sqrt();
-
-                    self.filters = ArrayD::from_shape_fn(
-                        IxDyn(&[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]), 
-                        |_| rand::thread_rng().gen_range(-range..range)
-                    );
-
-                    self.filter_array_allocated = true;
-                }
-
-                //self.weights = Array3::from_shape_fn(
-                //    (batch, cols, self.n_out), 
-                //    |(i, j, k)|
-                //    {
-                //        (i * cols * self.n_out + j * self.n_out + k) as f32
-                //    }
-                //).into_dyn() / (batch * cols * self.n_out) as f32;
-                self.filters_ptr = array_to_cuda_ptr_str(&mut self.filters);
-                self.filter_gradients_ptr = new_cuda_ptr_str(&[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]);
-                self.filters_grad_count_ptr = new_cuda_ptr_str(&[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]);
-                self.filter_velocity_ptr = new_cuda_ptr_str(&[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]);
-                self.filter_momentum_ptr = new_cuda_ptr_str(&[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]);
-
-                init_layer_connections(
-                    &mut self.backward_count, &str_ptr_in, 
-                    &mut self.backward_count_prev, &mut self.input_ptr, 
-                    &mut self.input_grad_ptr, &mut self.output_ptr, 
-                    &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                    &[self.out_shape.0, self.out_shape.1, self.out_shape.2]
+                self.weight_tensors.biases = random_float_vec(
+                    self.n_filters * self.stride_count_y * self.stride_count_x, 
+                    -0.001, 0.001
                 );
-
-                self.filter_ptr_allocated = true;
             }
+
+            self.parameter_ptrs.biases_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.biases);
+            self.parameter_ptrs.bias_grad_ptr = new_cuda_array(output_len);
+            self.parameter_ptrs.bias_vel_ptr = new_cuda_array(output_len);
+            self.parameter_ptrs.bias_moment_ptr = new_cuda_array(output_len);
+
+            self.input_grads_count_ptr = new_cuda_array((batch * rows * cols) as u32);
+
+            if !self.allocation_status.arrays_allocated
+            {
+                // initialise weights and weight pointer
+                let range: f32 = 
+                    (6.0 / 
+                        ((batch * self.filter_dim * self.filter_dim + 
+                         self.n_filters * self.filter_dim * self.filter_dim) as f32)).sqrt();
+
+                self.weight_tensors.weight = random_float_vec(
+                    weight_len as usize,
+                    -range, range
+                );
+            }
+    
+            self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
+            self.parameter_ptrs.weight_grad_ptr = new_cuda_array(weight_len);
+            self.parameter_ptrs.weight_vel_ptr = new_cuda_array(weight_len);
+            self.parameter_ptrs.weight_moment_ptr = new_cuda_array(weight_len);
+
+            self.filters_grad_count_ptr = new_cuda_array(weight_len);
+
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2
+            );
+
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
-
-        //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
-
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let filter_ptr: *mut f32 = string_to_ptr(&self.filters_ptr);
-        let result_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-        let bias_ptr: *mut f32 = string_to_ptr(&self.biases_ptr);
-
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-        //copy_cuda_to_cuda(
-        //    input_ptr, 
-        //    input.get_ptr(), 
-        //    &[batch, rows, cols]
-        //);
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //{
 
         //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
         //println!("filter: {:?}", cuda_ptr_to_array(filter_ptr, &[self.n_filters, batch, self.filter_dim, self.filter_dim]));
         conv2d_forward(
-            input_ptr, filter_ptr, result_ptr,
+            self.io_ptrs.input_ptr, 
+            self.parameter_ptrs.weight_ptr, 
+            self.io_ptrs.output_ptr,
             batch as u32, rows as u32, cols as u32, 
             self.n_filters as u32, self.stride_count_y as u32, self.stride_count_x as u32,
-            self.filter_dim as u32, self.strides as u32, bias_ptr, self.zero_output
+            self.filter_dim as u32, self.strides as u32, self.parameter_ptrs.biases_ptr, 
+            self.allocation_status.zero_output
         );
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
 
-        return self.output_traverse_ptr.clone();
+        return self.io_ptrs.output_traverse_ptr;
         //println!("output: {:?}", cuda_ptr_to_array(result_ptr, &[self.n_filters, self.stride_count_y, self.stride_count_x]));
         //element_op_3d_inplace(result_ptr, bias_ptr, 0, self.n_filters, self.stride_count_y, self.stride_count_x);
-
-        //}
-        //else
-        //{
-        //    matmul_add_bias(
-        //        input_ptr, batch as u32, rows as u32, cols as u32, 
-        //        weight_ptr, batch as u32, cols as u32, self.n_out as u32,
-        //        result_ptr, bias_ptr
-        //    );
-        //}
-        //let end = start.elapsed();
-        //println!("dense: {:.6}", end.as_secs_f64());
 
         //println!("-----------------------------");
         //println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
@@ -229,11 +173,9 @@ impl LayerCuda for Conv2dCuda
         //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
         //println!("-----------------------------");
         //exit(1);
-        // previous pointer will be recorded in previous layer
-
     }
 
-    pub fn backward(&mut self)
+    fn backward(&mut self)
     {
         let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
         //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
