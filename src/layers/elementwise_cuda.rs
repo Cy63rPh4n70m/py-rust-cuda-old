@@ -2,38 +2,22 @@ use std::{os::raw::c_void, process::exit};
 
 use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 
 use crate::{cuda_bridge::{elementwise_dropout_backward, elementwise_dropout_forward, gradient_desc_3d, init_random_states}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, ptr_to_string_void, set_zero_counter, string_to_ptr, string_to_ptr_void}};
 
-#[derive(Serialize, Deserialize)]
+use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
+
 pub struct ElementwiseCuda
 {
-    pub shape: (usize, usize, usize),
-    //pub io_ptrs: HashMap<String, String>,
-
-    pub weights: ArrayD<f32>,
-
-    pub weight_shift: f32,
-    pub range: f32,
-
-    pub weight_ptr: String,
-    pub weight_grad_ptr: String,
-    pub weight_velocity_ptr: String,
-    pub weight_momentum_ptr: String,
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
+    pub io_ptrs: IOPtrs,
+    pub parameter_ptrs: ParameterPtrs,
+    pub allocation_status: AllocationStatus,
+    pub weight_tensors: WeightTensors,
+    
     pub dropout_mask_ptr: String,
     pub rand_state_v_ptr: String,
 
     pub output_traverse_ptr: String,
-
-    pub backward_count: String,
-    pub backward_count_weight_prev: String,
-    pub backward_count_in_prev: String,
 
     pub dropout_rate: f32,
 
@@ -43,16 +27,6 @@ pub struct ElementwiseCuda
 
     pub batch_size: f32,
     pub count: u128,
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
-    pub zero_weight_grad: bool,
-
-    pub weight_ptr_allocated: bool, 
-    pub in_out_ptrs_allocated: bool,
-    pub bias_ptr_allocated: bool, 
-    pub weight_array_allocated: bool,
-    pub bias_array_allocated: bool,
-    //pub grads_ptr_allocated: bool,
 }
 impl ElementwiseCuda
 {
