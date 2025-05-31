@@ -1,58 +1,35 @@
 use std::{os::raw::c_void, process::exit};
 
-use ndarray::{ArrayD, IxDyn};
-use rand::Rng;
-use serde::{Deserialize, Serialize};
+use crate::{
+    cuda_bridge::{
+        elementwise_dropout_backward, elementwise_dropout_forward, 
+        gradient_desc_3d, init_random_states, new_cuda_array}, 
+        math_functions::random_float_vec, neuralnet::TraversePtrs, 
+        pointer_ops::{counter_is_zero, 
+            cuda_ptr_to_vec, increment_counter, init_trav_in_ptrs, 
+            set_zero_counter, vec_to_cuda_ptr}};
 
-use crate::{cuda_bridge::{elementwise_dropout_backward, elementwise_dropout_forward, gradient_desc_3d, init_random_states}, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, get_traverse_str_ptr, increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string, ptr_to_string_void, set_zero_counter, string_to_ptr, string_to_ptr_void}};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
-#[derive(Serialize, Deserialize)]
 pub struct ElementwiseCuda
 {
-    pub shape: (usize, usize, usize),
-    //pub io_ptrs: HashMap<String, String>,
-
-    pub weights: ArrayD<f32>,
-
-    pub weight_shift: f32,
-    pub range: f32,
-
-    pub weight_ptr: String,
-    pub weight_grad_ptr: String,
-    pub weight_velocity_ptr: String,
-    pub weight_momentum_ptr: String,
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub dropout_mask_ptr: String,
-    pub rand_state_v_ptr: String,
-
-    pub output_traverse_ptr: String,
-
-    pub backward_count: String,
-    pub backward_count_weight_prev: String,
-    pub backward_count_in_prev: String,
+    pub io_ptrs: IOPtrs,
+    pub parameter_ptrs: ParameterPtrs,
+    pub allocation_status: AllocationStatus,
+    pub weight_tensors: WeightTensors,
+    
+    pub dropout_mask_ptr: *mut f32,
+    pub rand_state_v_ptr: *mut c_void,
 
     pub dropout_rate: f32,
 
     pub op: u32,
+    pub range: f32,
     pub activation_fn_id: i32,
     pub activation_scale: f32,
 
     pub batch_size: f32,
     pub count: u128,
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
-    pub zero_weight_grad: bool,
-
-    pub weight_ptr_allocated: bool, 
-    pub in_out_ptrs_allocated: bool,
-    pub bias_ptr_allocated: bool, 
-    pub weight_array_allocated: bool,
-    pub bias_array_allocated: bool,
-    //pub grads_ptr_allocated: bool,
 }
 impl ElementwiseCuda
 {
@@ -63,186 +40,99 @@ impl ElementwiseCuda
         activation_scale: f32
     ) -> Self
     {
-        let weights: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
-
         return Self
         {
-            weights,
-            weight_shift: 0.0,
-            weight_ptr: "".to_string(),
-            weight_grad_ptr: "".to_string(),
-            weight_velocity_ptr: "".to_string(),
-            weight_momentum_ptr: "".to_string(),
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
+            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
+            parameter_ptrs: ParameterPtrs::new(),
+            allocation_status: AllocationStatus::new(),
+            weight_tensors: WeightTensors::new(),
 
-            dropout_mask_ptr: "".to_string(),
-            rand_state_v_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-            backward_count_in_prev: String::from("none"),
-            backward_count_weight_prev: String::from("none"),
-            backward_count: String::from("none"),
-            //dropout_result_ptr: "".to_string(),
+            dropout_mask_ptr: std::ptr::null_mut(),
+            rand_state_v_ptr: std::ptr::null_mut(),
 
             dropout_rate,
             op,
             activation_fn_id,
             activation_scale,
 
-            //biases,
-            //biases_ptr: "".to_string(),
-            //bias_gradients_ptr: "".to_string(),
-            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
-            //broadcast_array_ptr: "".to_string(),
-
-            //activation,
-            //result_ptr_t: "".to_string(),
             range,
-            shape: (batch, rows, cols),
-            zero_output: true,
-            zero_input_grad: false,
-            zero_weight_grad: false,
             //out_shape,
             batch_size: 0.0,
             count: 0,
-            weight_ptr_allocated: false, 
-            in_out_ptrs_allocated: false,
-            bias_ptr_allocated: false,
-            weight_array_allocated: false,
-            bias_array_allocated: false,
-            //grads_ptr_allocated: false,
         }
     }
+}
 
+impl LayerCuda for ElementwiseCuda
+{
     // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, str_ptr_in: String, str_ptr_weight: String, use_dropout: bool) -> String
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, use_dropout: bool) -> *mut TraversePtrs
     {
-        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
 
-        ////println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
-        if !self.in_out_ptrs_allocated
+        if !self.allocation_status.ptrs_allocated
         {   
-            ////////////////////////////////////////////////////////////////
-            //self.input_t_ptr = new_cuda_ptr_str(&[batch, cols, rows]);
-            //////////////////////////////////////////////////////////////////
-            
 
-            // initialise the result tensor/pointer
-            //self.result_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
+            let shape_flat: u32 = (self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2) as u32;
+            self.rand_state_v_ptr = init_random_states(
+                self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
+            );
+            self.dropout_mask_ptr = new_cuda_array(shape_flat);
+            self.parameter_ptrs.weight_vel_ptr = new_cuda_array(shape_flat);
+            self.parameter_ptrs.weight_moment_ptr = new_cuda_array(shape_flat);
             
-            self.rand_state_v_ptr = ptr_to_string_void(init_random_states(self.shape.0, self.shape.1, self.shape.2));
-            self.dropout_mask_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
-            self.weight_velocity_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
-            self.weight_momentum_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
-            //self.out_shape = (batch, rows, self.n_out);
-
-            self.in_out_ptrs_allocated = true;
-            
-            if str_ptr_weight == "none" 
+            if trav_ptr_weight.is_null()
             {
-                if !self.weight_array_allocated
+                if !self.allocation_status.arrays_allocated
                 {
                     // initialise weights and weight pointer
-                    //let range: f32 = (6.0 / (cols + rows) as f32).sqrt();
-                    self.weights = ArrayD::from_shape_fn(
-                        IxDyn(&[self.shape.0, self.shape.1, self.shape.2]), 
-                        |_| rand::thread_rng().gen_range(-self.range..self.range)
+                    self.weight_tensors.weight = random_float_vec(
+                        shape_flat as usize, 
+                        -self.range, self.range
                     );
 
-                    self.weight_array_allocated = true;
                 }
-
-                //self.weights = Array3::from_shape_fn(
-                //    (batch, cols, self.n_out), 
-                //    |(i, j, k)|
-                //    {
-                //        (i * cols * self.n_out + j * self.n_out + k) as f32
-                //    }
-                //).into_dyn() / (batch * cols * self.n_out) as f32;
-                self.weight_ptr = array_to_cuda_ptr_str(&mut self.weights);
-                ////println!("{:?}", cuda_ptr_to_array(string_to_ptr(weight_ptr), &[self.shape.0, self.shape.1, self.shape.2]));
-                self.weight_grad_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
+                // initialize weight ptrs
+                self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
+                self.parameter_ptrs.weight_grad_ptr = new_cuda_array(
+                    shape_flat
+                );
             }
             else
             {
-                let (weight_traverse_ptr, grad_weight_traverse_ptr,
-                    backward_count_weight_prev) = 
-                    get_traverse_str_ptr(&str_ptr_weight);
-
-                self.backward_count_weight_prev = backward_count_weight_prev;
-                self.weight_ptr = ptr_to_string(weight_traverse_ptr);
-                self.weight_grad_ptr = ptr_to_string(grad_weight_traverse_ptr);
+                unsafe
+                {
+                    self.parameter_ptrs.weight_ptr = (*trav_ptr_weight).ptr;
+                    self.parameter_ptrs.weight_grad_ptr = (*trav_ptr_weight).grad_ptr;
+                    self.io_ptrs.backward_count_weight_prev = (*trav_ptr_weight).backward_pass_count;
+                }
             }
 
-            self.weight_ptr_allocated = true;
-
-            init_layer_connections(
-                &mut self.backward_count, &str_ptr_in, 
-                &mut self.backward_count_in_prev, &mut self.input_ptr, 
-                &mut self.input_grad_ptr, &mut self.output_ptr, 
-                &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                &[self.shape.0, self.shape.1, self.shape.2]
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                shape_flat as usize
             );
+
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
-
-        //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
-
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        let mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-        let rand_states: *mut c_void = string_to_ptr_void(&self.rand_state_v_ptr);
-        let result_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-        //copy_cuda_to_cuda(
-        //    input_ptr, 
-        //    input.get_ptr(), 
-        //    &[batch, rows, cols]
-        //);
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //copy_cuda_to_cuda(weight_shifted_ptr, weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]);
-        //scalar_op_3d_inplace(weight_shifted_ptr, self.weight_shift, 1, self.shape.0, self.shape.1, self.shape.2);
-        //activation3d_cuda(
-        //    weight_act_ptr, weight_shifted_ptr, 
-        //    input_shape[0] as u32, input_shape[1] as u32, input_shape[2] as u32, 
-        //    "softplus"
-        //);
         
         elementwise_dropout_forward(
-            input_ptr, weight_ptr, result_ptr, mask_ptr, rand_states,
-            self.shape.0, self.shape.1, self.shape.2, self.dropout_rate, self.op,
+            self.io_ptrs.input_ptr, self.parameter_ptrs.weight_ptr, self.io_ptrs.output_ptr, 
+            self.dropout_mask_ptr, self.rand_state_v_ptr,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
+            self.dropout_rate, self.op,
             self.activation_fn_id, self.activation_scale, 
-            use_dropout, self.zero_output
+            use_dropout, self.allocation_status.zero_output
         );
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
         //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("weights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-
-        return self.output_traverse_ptr.clone();
-
-        //element_op_3d_ret(result_ptr, input_ptr, weight_ptr, 2, self.shape.0, self.shape.1, self.shape.2);
-
-        //element_op_3d_inplace(
-        //    result_ptr, bias_ptr, 
-        //    0, 
-        //    self.shape.0, self.shape.1, self.shape.2
-        //);
-
         ////println!("-----------------------------");
         ////println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         ////println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[batch, rows, cols]));
@@ -256,75 +146,33 @@ impl ElementwiseCuda
         //exit(1);
         // previous pointer will be recorded in previous layer
 
+        return self.io_ptrs.output_traverse_ptr;
+
     }
 
-    pub fn backward(&mut self, use_dropout: bool)
+    fn backward(&mut self, use_dropout: bool)
     {
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        //let weight_t_ptr: *mut f32 = string_to_ptr(&self.weight_t_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
-        //let weight_grad_temp_ptr: *mut f32 = string_to_ptr(&self.weight_gradients_temp_ptr);
-        let original_grads: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-
-        let mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-
-        ////println!("=========================================================");
-        ////println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("\nweights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("\nmatmul result: {:?}", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-
-        // calculate gradient for bias
-        //copy_cuda_to_cuda(
-        //    bias_grad_ptr, original_grads, 
-        //    &[self.shape.0, self.shape.1, self.shape.2]
-        //);
-
-        /*
-        // calculate gradient for weights (broadcast multiplying original_grads along axis)
-        element_op_3d_ret(
-            weight_grad_temp_ptr, 
-            original_grads, input_ptr, 2, 
-            self.shape.0, self.shape.1, self.shape.2
-        );
-        element_op_3d_inplace(weight_grad_ptr, weight_grad_temp_ptr, 0, self.shape.0, self.shape.1, self.shape.2);
-
-        //activation3d_cuda_backward(
-        //    weight_grad_ptr, weight_shifted_ptr, weight_act_grad_ptr, 
-        //    self.shape.0 as u32, self.shape.1 as u32, self.shape.2 as u32, 
-        //    "softplus"
-        //);
-        
-        // calculate gradient for input (elementwise multiplication followed by summation along axis)
-        element_op_3d_ret(
-            input_grad_ptr, 
-            original_grads, weight_ptr, 2, 
-            self.shape.0, self.shape.1, self.shape.2
-        );
-        */
-        ////println!("A");
-        if counter_is_zero(&self.backward_count_in_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = true;
         }
         
-        ////println!("{:?}", self.backward_count_weight_prev);
-        if counter_is_zero(&self.backward_count_weight_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_weight_prev)
         {
-            self.zero_weight_grad = true;
+            self.allocation_status.zero_weight_grad = true;
         }
 
         elementwise_dropout_backward(
-            original_grads, mask_ptr, 
-            input_ptr, weight_ptr, weight_grad_ptr, 
-            input_grad_ptr, use_dropout, self.activation_fn_id, self.activation_scale,
-            self.shape.0, self.shape.1, self.shape.2, self.op,
-            self.zero_input_grad, self.zero_weight_grad
+            self.io_ptrs.output_grad_ptr, self.dropout_mask_ptr, 
+            self.io_ptrs.input_ptr, self.parameter_ptrs.weight_ptr, 
+            self.parameter_ptrs.weight_grad_ptr, 
+            self.io_ptrs.input_grad_ptr, use_dropout, 
+            self.activation_fn_id, self.activation_scale,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
+            self.op, self.allocation_status.zero_input_grad, self.allocation_status.zero_weight_grad
         );
         
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
 
         self.batch_size += 1.0;
         ////println!("B");
@@ -341,45 +189,20 @@ impl ElementwiseCuda
         //exit(1);      
         // calculate summed respect to bias
         // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
 
-    pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_grad_ptr);
-        let weight_velocity_ptr: *mut f32 = string_to_ptr(&self.weight_velocity_ptr);
-        let weight_momentum_ptr: *mut f32 = string_to_ptr(&self.weight_momentum_ptr);
-
-        //scalar_op_3d_inplace(weight_grad_ptr, self.lr, 2, self.shape.0, self.shape.2, self.out_shape.2);
-        //scalar_op_3d_inplace(bias_grad_ptr, self.lr, 2, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-        //element_op_3d_inplace(weight_ptr, weight_grad_ptr, 1, self.shape.0, self.shape.2, self.out_shape.2);
-        //element_op_3d_inplace(bias_ptr, bias_grad_ptr, 1, self.out_shape.0, self.out_shape.1, self.out_shape.2);
         gradient_desc_3d(
             lr, l2,
-            weight_ptr, weight_grad_ptr, weight_velocity_ptr, weight_momentum_ptr,
-            self.shape.0, self.shape.1, self.shape.2,
-            weight_ptr, weight_grad_ptr, weight_velocity_ptr, weight_momentum_ptr,
-            self.shape.0, self.shape.1, self.shape.2,
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2,
+            
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2,
+
             true, true, self.batch_size, optimizer_type, alpha, beta
         );
         
@@ -390,36 +213,13 @@ impl ElementwiseCuda
         //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
-    pub fn zero_io(&mut self, io_ptr_name: &String)
-    {
-        //let io_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get(io_ptr_name).unwrap());
-
-        if io_ptr_name.contains("input")
-        {
-            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.1, self.in_shape.2);
-            self.zero_input_grad = true;
-        }
-        
-        if io_ptr_name.contains("output")
-        {
-            //zeroes_3d_inplace(io_ptr, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-            self.zero_output = true;
-        }
-        
-        if io_ptr_name.contains("weight")
-        {
-            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.2, self.out_shape.2);
-            self.zero_weight_grad = true;
-        }
-    }
-
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: ELEMENTWISE");
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.weight_ptr, self.weight_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
-        println!("Input shape: {:?}", self.shape);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Input shape: {:?}", self.io_ptrs.in_shape);
         
         let activation_str: &str;
         match self.activation_fn_id
@@ -443,17 +243,20 @@ impl ElementwiseCuda
         {
             println!("Type: mul");
         }
-        println!("Weights: \n{:?}", self.weights);
+        println!("Weights: \n{:?}", self.weight_tensors.weight);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
-        return self.shape.0 * self.shape.1 * self.shape.2;
+        return self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
-        self.weights = cuda_ptr_to_array(string_to_ptr(&self.weight_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
+        self.weight_tensors.weight = cuda_ptr_to_vec(
+            self.parameter_ptrs.weight_ptr, 
+            self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2
+        );
         //self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
         //free_cuda_array(string_to_ptr(&self.weight_ptr));
         //free_cuda_array(string_to_ptr(&self.biases_ptr));
@@ -463,16 +266,5 @@ impl ElementwiseCuda
         //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
         //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
         //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-
-        self.weight_ptr_allocated = false;
-        self.bias_ptr_allocated = false;
-        self.in_out_ptrs_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.weight_ptr_allocated = true;
-        self.bias_ptr_allocated = true;
-        self.in_out_ptrs_allocated = true;
     }
 }
