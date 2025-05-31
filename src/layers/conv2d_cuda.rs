@@ -4,7 +4,7 @@ use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, gradient_desc_3d, new_cuda_array, zeroes_3d_inplace}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, increment_counter, init_layer_connections, init_trav_in_ptrs, new_cuda_ptr_str, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
+use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, gradient_desc_3d, new_cuda_array, zeroes_3d_inplace}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, counter_is_zero, cuda_ptr_to_array, cuda_ptr_to_vec, increment_counter, init_layer_connections, init_trav_in_ptrs, new_cuda_ptr_str, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
@@ -254,27 +254,18 @@ impl LayerCuda for Conv2dCuda
                self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self, bias_only: bool)
+    fn move_ptrs_to_arrays(&mut self)
     {
-        if !bias_only
-        {
-            self.filters = cuda_ptr_to_array(string_to_ptr(&self.filters_ptr), &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]);
-        }
-        else
-        {
-            self.filters = ArrayD::zeros(IxDyn(&[0]));
-            self.filter_array_allocated = false;
-        }
+        self.weight_tensors.weight = cuda_ptr_to_vec(
+            self.parameter_ptrs.weight_ptr, 
+            self.n_filters * self.in_channels * self.filter_dim * self.filter_dim
+        );
 
-        if self.use_bias
-        {
-            self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), 
-                &[self.out_shape.0, self.out_shape.1, self.out_shape.2]);
-        }
-        else
-        {
-            self.bias_array_allocated = false;
-        }
+        self.weight_tensors.biases = cuda_ptr_to_vec(
+            self.parameter_ptrs.biases_ptr, 
+            self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2
+        );
+        
         //free_cuda_array(string_to_ptr(&self.weight_ptr));
         //free_cuda_array(string_to_ptr(&self.biases_ptr));
         //free_cuda_array(string_to_ptr(&self.input_ptr));
@@ -283,14 +274,5 @@ impl LayerCuda for Conv2dCuda
         //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
         //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
         //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-
-        self.filter_ptr_allocated = false;
-        self.bias_ptr_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.filter_ptr_allocated = true;
-        self.bias_ptr_allocated = true;
     }
 }
