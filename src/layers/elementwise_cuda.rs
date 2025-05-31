@@ -58,132 +58,76 @@ impl ElementwiseCuda
         }
     }
 
+impl LayerCuda for ElementwiseCuda
+{
     // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, str_ptr_in: String, str_ptr_weight: String, use_dropout: bool) -> String
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, use_dropout: bool) -> *mut TraversePtrs
     {
-        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
 
-        ////println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
-        if !self.in_out_ptrs_allocated
+        if !self.allocation_status.ptrs_allocated
         {   
-            ////////////////////////////////////////////////////////////////
-            //self.input_t_ptr = new_cuda_ptr_str(&[batch, cols, rows]);
-            //////////////////////////////////////////////////////////////////
-            
 
-            // initialise the result tensor/pointer
-            //self.result_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
+            let shape_flat: u32 = (self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2) as u32;
+            self.rand_state_v_ptr = init_random_states(
+                self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
+            );
+            self.dropout_mask_ptr = new_cuda_array(shape_flat);
+            self.parameter_ptrs.weight_vel_ptr = new_cuda_array(shape_flat);
+            self.parameter_ptrs.weight_moment_ptr = new_cuda_array(shape_flat);
             
-            self.rand_state_v_ptr = ptr_to_string_void(init_random_states(self.shape.0, self.shape.1, self.shape.2));
-            self.dropout_mask_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
-            self.weight_velocity_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
-            self.weight_momentum_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
-            //self.out_shape = (batch, rows, self.n_out);
-
-            self.in_out_ptrs_allocated = true;
-            
-            if str_ptr_weight == "none" 
+            if trav_ptr_weight.is_null()
             {
-                if !self.weight_array_allocated
+                if !self.allocation_status.arrays_allocated
                 {
                     // initialise weights and weight pointer
-                    //let range: f32 = (6.0 / (cols + rows) as f32).sqrt();
-                    self.weights = ArrayD::from_shape_fn(
-                        IxDyn(&[self.shape.0, self.shape.1, self.shape.2]), 
-                        |_| rand::thread_rng().gen_range(-self.range..self.range)
+                    self.weight_tensors.weight = random_float_vec(
+                        shape_flat as usize, 
+                        -self.range, self.range
                     );
 
-                    self.weight_array_allocated = true;
                 }
-
-                //self.weights = Array3::from_shape_fn(
-                //    (batch, cols, self.n_out), 
-                //    |(i, j, k)|
-                //    {
-                //        (i * cols * self.n_out + j * self.n_out + k) as f32
-                //    }
-                //).into_dyn() / (batch * cols * self.n_out) as f32;
-                self.weight_ptr = array_to_cuda_ptr_str(&mut self.weights);
-                ////println!("{:?}", cuda_ptr_to_array(string_to_ptr(weight_ptr), &[self.shape.0, self.shape.1, self.shape.2]));
-                self.weight_grad_ptr = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
+                // initialize weight ptrs
+                self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
+                self.parameter_ptrs.weight_grad_ptr = new_cuda_array(
+                    shape_flat
+                );
             }
             else
             {
-                let (weight_traverse_ptr, grad_weight_traverse_ptr,
-                    backward_count_weight_prev) = 
-                    get_traverse_str_ptr(&str_ptr_weight);
-
-                self.backward_count_weight_prev = backward_count_weight_prev;
-                self.weight_ptr = ptr_to_string(weight_traverse_ptr);
-                self.weight_grad_ptr = ptr_to_string(grad_weight_traverse_ptr);
+                unsafe
+                {
+                    self.parameter_ptrs.weight_ptr = (*trav_ptr_weight).ptr;
+                    self.parameter_ptrs.weight_grad_ptr = (*trav_ptr_weight).grad_ptr;
+                    self.io_ptrs.backward_count_weight_prev = (*trav_ptr_weight).backward_pass_count;
+                }
             }
 
-            self.weight_ptr_allocated = true;
-
-            init_layer_connections(
-                &mut self.backward_count, &str_ptr_in, 
-                &mut self.backward_count_in_prev, &mut self.input_ptr, 
-                &mut self.input_grad_ptr, &mut self.output_ptr, 
-                &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                &[self.shape.0, self.shape.1, self.shape.2]
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                shape_flat as usize
             );
+
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
-
-        //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
-
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let weight_ptr: *mut f32 = string_to_ptr(&self.weight_ptr);
-        let mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-        let rand_states: *mut c_void = string_to_ptr_void(&self.rand_state_v_ptr);
-        let result_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-        //copy_cuda_to_cuda(
-        //    input_ptr, 
-        //    input.get_ptr(), 
-        //    &[batch, rows, cols]
-        //);
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //copy_cuda_to_cuda(weight_shifted_ptr, weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]);
-        //scalar_op_3d_inplace(weight_shifted_ptr, self.weight_shift, 1, self.shape.0, self.shape.1, self.shape.2);
-        //activation3d_cuda(
-        //    weight_act_ptr, weight_shifted_ptr, 
-        //    input_shape[0] as u32, input_shape[1] as u32, input_shape[2] as u32, 
-        //    "softplus"
-        //);
         
         elementwise_dropout_forward(
-            input_ptr, weight_ptr, result_ptr, mask_ptr, rand_states,
-            self.shape.0, self.shape.1, self.shape.2, self.dropout_rate, self.op,
+            self.io_ptrs.input_ptr, self.parameter_ptrs.weight_ptr, self.io_ptrs.output_ptr, 
+            self.dropout_mask_ptr, self.rand_state_v_ptr,
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
+            self.dropout_rate, self.op,
             self.activation_fn_id, self.activation_scale, 
-            use_dropout, self.zero_output
+            use_dropout, self.allocation_status.zero_output
         );
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
         //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("weights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-
-        return self.output_traverse_ptr.clone();
-
-        //element_op_3d_ret(result_ptr, input_ptr, weight_ptr, 2, self.shape.0, self.shape.1, self.shape.2);
-
-        //element_op_3d_inplace(
-        //    result_ptr, bias_ptr, 
-        //    0, 
-        //    self.shape.0, self.shape.1, self.shape.2
-        //);
-
         ////println!("-----------------------------");
         ////println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         ////println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[batch, rows, cols]));
@@ -196,6 +140,8 @@ impl ElementwiseCuda
         ////println!("-----------------------------");
         //exit(1);
         // previous pointer will be recorded in previous layer
+
+        return self.io_ptrs.output_traverse_ptr;
 
     }
 
