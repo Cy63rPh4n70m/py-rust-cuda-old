@@ -16,39 +16,11 @@ impl ActivationCuda
     pub fn new(activation_str: &str, batch: usize, rows: usize, cols: usize, scale: f32) -> Self
     {
         return Self {
-            //io_ptrs,
-            /*
-            a: ArrayD::zeros(IxDyn(&[0])),
-            a_ptr: String::from("NONE"),
-            a_grads_ptr: String::from("NONE"),
-            a_vel_ptr: String::from("NONE"),      
-            b: ArrayD::zeros(IxDyn(&[0])),
-            b_ptr: String::from("NONE"),
-            b_grads_ptr: String::from("NONE"),
-            b_vel_ptr: String::from("NONE"), 
-            */
-
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
-            
+            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
+            allocation_status: AllocationStatus::new(),
             activation_str: activation_str.to_string(),
-            //lr,
-            //l2,
             scale,
             batch_size: 0.0,
-            shape: (batch, rows, cols),
-            zero_output: true,
-            zero_input_grad: false,
-
-            ptrs_allocated: false,
-            arrays_allocated: false,
         }
     }
 
