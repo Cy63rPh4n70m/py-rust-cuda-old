@@ -212,10 +212,10 @@ impl LayerCuda for ElementwiseCuda
     fn details(&self)
     {
         println!("Layer type: ELEMENTWISE");
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.weight_ptr, self.weight_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
-        println!("Input shape: {:?}", self.shape);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Input shape: {:?}", self.io_ptrs.in_shape);
         
         let activation_str: &str;
         match self.activation_fn_id
@@ -239,7 +239,7 @@ impl LayerCuda for ElementwiseCuda
         {
             println!("Type: mul");
         }
-        println!("Weights: \n{:?}", self.weights);
+        println!("Weights: \n{:?}", self.weight_tensors.weight);
     }
 
     pub fn get_param_count(&self) -> usize
