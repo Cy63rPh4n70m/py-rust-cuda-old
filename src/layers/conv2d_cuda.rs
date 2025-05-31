@@ -40,44 +40,12 @@ impl Conv2dCuda
         batch: usize, rows: usize, cols: usize, flatten: bool, name: &str
     ) -> Self
     {
-        let filters: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
-        let biases: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
-
+        let in_shape: (usize, usize, usize) = (batch, rows, cols);
+        let out_shape: (usize, usize, usize) = (n_filters, ((rows - filter_dim) / strides) + 1, ((cols - filter_dim) / strides) + 1),
         return Self
         {
             name: name.to_string(),
-            input: ArrayD::zeros(IxDyn(&[0])),
-            filters,
-            filters_ptr: "".to_string(),
-            filter_gradients_ptr: "".to_string(),
-            filters_grad_count_ptr: "".to_string(),
-            filter_velocity_ptr: "".to_string(),
-            filter_momentum_ptr: "".to_string(),
-            
-            //io_ptrs,
 
-            input_grads_count_ptr: "".to_string(),
-
-            biases,
-            biases_ptr: "".to_string(),
-            bias_gradients_ptr: "".to_string(),
-            bias_velocity_ptr: "".to_string(),
-            bias_momentum_ptr: "".to_string(),
-
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
-            
-            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
-            //broadcast_array_ptr: "".to_string(),
-            in_shape: (batch, rows, cols),
-            out_shape: (n_filters, ((rows - filter_dim) / strides) + 1, ((cols - filter_dim) / strides) + 1),
             n_filters,
             filter_dim,
             strides,
@@ -86,15 +54,16 @@ impl Conv2dCuda
             stride_count_x: 0,
             batch_size: 0.0,
             count: 0,
-            filter_ptr_allocated: false, 
-            bias_ptr_allocated: false,
-            filter_array_allocated: false,
-            bias_array_allocated: false,
-            //grads_ptr_allocated: false,
             use_bias: true,
-            zero_output: true,
-            zero_input_grad: false,
-            flatten
+            flatten,
+
+            io_ptrs: IOPtrs::new(in_shape, out_shape),
+            parameter_ptrs: ParameterPtrs::new(),
+            allocation_status: AllocationStatus::new(),
+            weight_tensors: WeightTensors::new(),
+            
+            input_grads_count_ptr: std::ptr::null_mut(),
+            filters_grad_count_ptr: std::ptr::null_mut(),
         }
     }
 
