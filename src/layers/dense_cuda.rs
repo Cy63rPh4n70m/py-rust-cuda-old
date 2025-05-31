@@ -114,6 +114,7 @@ impl LayerCuda for DenseCuda
             );
 
             self.allocation_status.arrays_allocated = true;
+            self.allocation_status.ptrs_allocated = true;
 
             // initialize the input traversal pointers from input/previous layer
             init_trav_in_ptrs(
