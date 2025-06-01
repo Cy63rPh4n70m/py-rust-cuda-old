@@ -110,21 +110,21 @@ impl LayerCuda for SumCuda
         self.batch_size = 0.0;
     }
 
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: SUM");
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
-        println!("Input shape: {:?}", self.shape);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Input shape: {:?}", self.io_ptrs.in_shape);
         println!("Axis: {:?}", self.axis);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return 0_usize;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
         //self.weights = cuda_ptr_to_array(
         //    string_to_ptr(self.io_ptrs.get("weight").unwrap()), 
@@ -139,11 +139,5 @@ impl LayerCuda for SumCuda
         //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
         //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
         //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-        self.in_out_ptrs_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.in_out_ptrs_allocated = true;
     }
 }
