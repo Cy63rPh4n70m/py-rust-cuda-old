@@ -20,7 +20,7 @@ impl BatchTransposeCuda
     {
         return Self
         {
-            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
+            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, cols, rows)),
             allocation_states: AllocationStatus::new(),
             batch_size: 0.0,
             count: 0,
