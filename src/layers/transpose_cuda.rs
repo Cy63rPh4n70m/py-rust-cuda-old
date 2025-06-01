@@ -82,28 +82,8 @@ impl LayerCuda for BatchTransposeCuda
         //exit(1);      
     }
 
-    pub fn update_params(&mut self)
+    fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
     {   
-        /*
-        let weight_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("weight").unwrap());
-        let weight_grad_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("weight_grad").unwrap());
-        let weight_vel_ptr: *mut f32 = string_to_ptr(&self.weight_vel_ptr);
-
-        //scalar_op_3d_inplace(weight_grad_ptr, self.lr, 2, self.shape.0, self.shape.2, self.shape.2);
-        //scalar_op_3d_inplace(bias_grad_ptr, self.lr, 2, self.shape.0, self.shape.1, self.shape.2);
-        //element_op_3d_inplace(weight_ptr, weight_grad_ptr, 1, self.shape.0, self.shape.2, self.shape.2);
-        //element_op_3d_inplace(bias_ptr, bias_grad_ptr, 1, self.shape.0, self.shape.1, self.shape.2);
-        gradient_desc_3d_dense(
-            self.lr, self.l2,
-            weight_ptr, weight_grad_ptr, weight_vel_ptr,self.shape.0, self.shape.1, self.shape.2,
-            weight_ptr, weight_grad_ptr, weight_vel_ptr, self.shape.0, self.shape.1, self.shape.2,
-            true, true, self.batch_size
-        );
-
-        //println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.shape.0, self.shape.2, self.shape.2]))
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
-        */
         self.batch_size = 0.0;
     }
 
