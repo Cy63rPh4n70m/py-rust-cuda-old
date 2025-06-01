@@ -38,88 +38,31 @@ impl LayerCuda for CLSCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
-        //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
-
-        //println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
-        if !self.in_out_ptrs_allocated
-        {   
-            init_layer_connections(
-                &mut self.backward_count, &str_ptr_in, 
-                &mut self.backward_count_prev, &mut self.input_ptr, 
-                &mut self.input_grad_ptr, &mut self.output_ptr, 
-                &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                &[1, 1, self.shape.2]
+        if !self.allocation_status.ptrs_allocated
+        {
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
                 (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2) as usize
             );
-            self.in_out_ptrs_allocated = true;
+
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
 
-        //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
-
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        //let weight_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("weight").unwrap());
-        //let mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-        //let rand_states: *mut c_void = string_to_ptr_void(&self.rand_state_v_ptr);
-        let result_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-        //copy_cuda_to_cuda(
-        //    input_ptr, 
-        //    input.get_ptr(), 
-        //    &[batch, rows, cols]
-        //);
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //copy_cuda_to_cuda(weight_shifted_ptr, weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]);
-        //scalar_op_3d_inplace(weight_shifted_ptr, self.weight_shift, 1, self.shape.0, self.shape.1, self.shape.2);
-        //activation3d_cuda(
-        //    weight_act_ptr, weight_shifted_ptr, 
-        //    input_shape[0] as u32, input_shape[1] as u32, input_shape[2] as u32, 
-        //    "softplus"
-        //);
-
         // pointer arithmetic to select token embedding at index
-        let chosen_embedding_ptr: *mut f32 = unsafe { input_ptr.add(self.token_idx * self.shape.2) };
-        copy_cuda_to_cuda(result_ptr, chosen_embedding_ptr, &[self.shape.2]);
+        let chosen_embedding_ptr: *mut f32 = unsafe { self.io_ptrs.input_ptr.add(self.token_idx * self.io_ptrs.in_shape.2) };
+        copy_cuda_to_cuda(self.io_ptrs.output_ptr, chosen_embedding_ptr, &[self.io_ptrs.in_shape.2]);
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
 
         //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[1, 1, self.shape.2]));
 
-
-        return self.output_traverse_ptr.clone();
-
-        //element_op_3d_ret(result_ptr, input_ptr, weight_ptr, 2, self.shape.0, self.shape.1, self.shape.2);
-
-        //element_op_3d_inplace(
-        //    result_ptr, bias_ptr, 
-        //    0, 
-        //    self.shape.0, self.shape.1, self.shape.2
-        //);
-
-        //println!("-----------------------------");
-        //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[batch, rows, cols]));
-        //println!("weights: {:?}\n", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-        // current pointer is already recorded by previous layer, don't free
-        //input.set_ptr(result_ptr, vec![self.shape.0, self.shape.1, self.shape.2]);
-
-        //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[1, 1, self.shape.2]));
-        //exit(1);
-        //println!("-----------------------------");
-        //exit(1);
-        // previous pointer will be recorded in previous layer
+        return self.io_ptrs.output_traverse_ptr;
 
     }
 
