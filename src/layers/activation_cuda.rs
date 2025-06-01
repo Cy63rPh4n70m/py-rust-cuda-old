@@ -1,4 +1,4 @@
-use crate::{cuda_bridge::{activation3d_cuda, activation3d_cuda_backward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, set_zero_counter, string_to_ptr}};
+use crate::{cuda_bridge::{activation3d_cuda, activation3d_cuda_backward}, neuralnet::TraversePtrs, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, init_trav_in_ptrs, set_zero_counter, string_to_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
@@ -27,78 +27,35 @@ impl ActivationCuda
 
 impl LayerCuda for ActivationCuda
 {
-    pub fn forward(&mut self, str_ptr_in: String) -> String
-    {        
-        if !self.ptrs_allocated
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
+    {       
+        if !self.allocation_status.ptrs_allocated
         {
-            //self.input_ptr = input.get_ptr_as_str();
-            //self.output_ptr = new_cuda_ptr_str(input_shape);
-
-            //self.input_grads_ptr = new_cuda_ptr_str(input_shape);
-            //self.output_grads_ptr = new_cuda_ptr_str(input_shape);
-
-            /*
-            if !self.arrays_allocated
-            {
-                self.a = ArrayD::from_shape_fn(
-                    IxDyn(input_shape), 
-                    |_| self.range
-                );
-
-                self.b = ArrayD::zeros(IxDyn(input_shape));
-            }
-
-            self.a_ptr = array_to_cuda_ptr_str(&mut self.a);
-            self.a_grads_ptr = new_cuda_ptr_str(input_shape);
-            self.a_vel_ptr = new_cuda_ptr_str(input_shape);
-            self.b_ptr = array_to_cuda_ptr_str(&mut self.b);
-            self.b_grads_ptr = new_cuda_ptr_str(input_shape);
-            self.b_vel_ptr = new_cuda_ptr_str(input_shape);
-            */
-
-            init_layer_connections(
-                &mut self.backward_count, &str_ptr_in, 
-                &mut self.backward_count_prev, &mut self.input_ptr, 
-                &mut self.input_grad_ptr, &mut self.output_ptr, 
-                &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                &[self.shape.0, self.shape.1, self.shape.2]
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                (self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2) as usize
             );
 
-            self.ptrs_allocated = true;
-            self.arrays_allocated = true;
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
 
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let output_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-        //let a: *mut f32 = string_to_ptr(&self.a_ptr);
-        //let b: *mut f32 = string_to_ptr(&self.b_ptr);
-
-        ////println!("{:?}, {:?}", input_ptr, output_ptr);
-        //copy_cuda_to_cuda(input_ptr, input.get_ptr(), input_shape);
         activation3d_cuda(
-            output_ptr, input_ptr, 
-            self.shape.0 as u32, self.shape.1 as u32, self.shape.2 as u32, 
-            &self.activation_str, self.scale, self.zero_output
+            self.io_ptrs.output_ptr, self.io_ptrs.input_ptr, 
+            self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.1 as u32, self.io_ptrs.in_shape.2 as u32, 
+            &self.activation_str, self.scale, self.allocation_status.zero_output
             //a, b
         );
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
 
         //println!("input {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("output {:?}\n", cuda_ptr_to_array(output_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
 
-        return self.output_traverse_ptr.clone();
-        //round_3d_inplace(
-        //    output_ptr, 5, 
-        //    input_shape[0] as i32, input_shape[1] as i32, input_shape[2] as i32
-        //);
-
-        ////println!("-------------------------");
-        ////println!("input {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("output {:?}\n", cuda_ptr_to_array(output_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //input.set_ptr(output_ptr, input_shape.to_vec());
-        ////println!("forward activated{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
-        ////println!("-------------------------");
-        //exit(1);
+        return self.io_ptrs.output_traverse_ptr;
     }
 
     pub fn backward(&mut self)
