@@ -1,8 +1,9 @@
-use serde::{Deserialize, Serialize};
+use crate::{
+    cuda_bridge::transpose_2d, neuralnet::TraversePtrs, 
+    pointer_ops::{increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
-use crate::{cuda_bridge::transpose_2d, pointer_ops::{increment_counter, init_layer_connections, set_zero_counter, string_to_ptr}};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
-#[derive(Serialize, Deserialize)]
 pub struct BatchTransposeCuda
 {
     pub io_ptrs: IOPtrs,
