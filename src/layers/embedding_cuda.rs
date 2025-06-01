@@ -126,30 +126,22 @@ impl LayerCuda for Embedding2DCuda
         //exit(1);
     }
 
-    pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
-        let embedding_lookup_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_ptr);
-        let embedding_lookup_grad_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_grad_ptr);
-        let embedding_lookup_velocity_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_velocity_ptr);
-        let embedding_lookup_momentum_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_momentum_ptr);
-
-        //scalar_op_3d_inplace(pos_encoding_grad_ptr, self.lr, 2, self.out_shape.0, self.out_shape.1, self.out_shape.2);
-        //element_op_3d_inplace(pos_encoding_ptr, pos_encoding_grad_ptr, 1, self.out_shape.0, self.out_shape.1, self.out_shape.2);
         gradient_desc_3d(
             lr, l2,
-            embedding_lookup_ptr, embedding_lookup_grad_ptr,
-            embedding_lookup_velocity_ptr, embedding_lookup_momentum_ptr,
-            1, self.vocab_size, self.embedding_len, 
-            embedding_lookup_ptr, embedding_lookup_grad_ptr, 
-            embedding_lookup_velocity_ptr, embedding_lookup_momentum_ptr,
-            1, self.vocab_size, self.embedding_len,  
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr,
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            1, self.vocab_size, self.embedding_len,
+
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr,
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            1, self.vocab_size, self.embedding_len,
+
             true, false, self.batch_size, optimizer_type, alpha, beta
         );
 
         self.batch_size = 0.0;
-        ////println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]))
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
     pub fn zero_io(&mut self, io_ptr_name: &String)
