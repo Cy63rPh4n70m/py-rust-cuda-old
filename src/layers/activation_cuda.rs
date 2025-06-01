@@ -103,28 +103,14 @@ impl LayerCuda for ActivationCuda
         println!("Shape: {:?}", self.io_ptrs.in_shape);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return 0_usize;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
-        //self.a = cuda_ptr_to_array(string_to_ptr(&self.a_ptr), self.tensor_shape.as_slice());
-        //self.b = cuda_ptr_to_array(string_to_ptr(&self.b_ptr), self.tensor_shape.as_slice());
-
-        //free_cuda_array(string_to_ptr(&self.a_ptr));
-        //free_cuda_array(string_to_ptr(&self.a_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.b_ptr));
-        //free_cuda_array(string_to_ptr(&self.b_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
 
         self.ptrs_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.ptrs_allocated = true;
     }
 }
