@@ -104,29 +104,19 @@ impl LayerCuda for Embedding2DCuda
         return self.io_ptrs.output_traverse_ptr;
     }
 
-    pub fn backward(&mut self)
+    fn backward(&mut self, _use_dropout: bool)
     {
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        let output_grad_ptr: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-        let embedding_lookup_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_ptr);
-        let embedding_lookup_grad_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_grad_ptr);
-        let embedding_lookup_grad_count_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_grad_count_ptr);
-        let embedding_lookup_grad_temp_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_grad_temp_ptr);
-        //let weight_grad_ptr: *mut f32 = string_to_ptr(&self.weight_gradients_ptr);
-        //let bias_grad_ptr: *mut f32 = string_to_ptr(&self.bias_gradients_ptr);
-
         ////println!("{:?}", cuda_ptr_to_array(ptr.get_ptr(), &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
         ////println!("{:?}", cuda_ptr_to_array(embedding_lookup_grad_ptr, &[1, self.vocab_size, self.embedding_len]));
 
         embedding_backward(
-            input_ptr, self.in_shape.2, 
-            embedding_lookup_ptr, self.vocab_size, self.embedding_len, 
-            embedding_lookup_grad_ptr, 
-            embedding_lookup_grad_temp_ptr,
-            embedding_lookup_grad_count_ptr,
-            output_grad_ptr, 
-            input_grad_ptr
+            self.io_ptrs.input_ptr, self.seq_len, 
+            self.parameter_ptrs.weight_ptr, self.vocab_size, self.embedding_len, 
+            self.parameter_ptrs.weight_grad_ptr,
+            self.embedding_lookup_grad_temp_ptr,
+            self.embedding_lookup_grad_count_ptr,
+            self.io_ptrs.output_grad_ptr, 
+            self.io_ptrs.input_grad_ptr
         );
 
         self.batch_size += 1.0;
@@ -134,37 +124,6 @@ impl LayerCuda for Embedding2DCuda
         //println!("{:?}", cuda_ptr_to_array(input_ptr, &[1, 1, self.seq_len]));
         //println!("{:?}", cuda_ptr_to_array(embedding_lookup_grad_ptr, &[1, self.vocab_size, self.embedding_len]));
         //exit(1);
-
-        ////println!("{:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        ////println!("\noriginal_grads: {:?}", cuda_ptr_to_array(output_grad_ptr, &[1, self.seq_len, self.embedding_len]));
-        //ptr.set_ptr(input_grad_ptr, vec![self.in_shape.0, self.in_shape.1, self.in_shape.2]);
-        ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        ////println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        ////println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        ////println!("=========================================================");
-        //exit(1);      
-        // calculate summed respect to bias
-        // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.in_shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
 
     pub fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
