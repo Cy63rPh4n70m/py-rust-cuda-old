@@ -1,6 +1,6 @@
 use crate::{cuda_bridge::{activation3d_cuda, activation3d_cuda_backward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, set_zero_counter, string_to_ptr}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct ActivationCuda
 {
@@ -23,7 +23,10 @@ impl ActivationCuda
             batch_size: 0.0,
         }
     }
+}
 
+impl LayerCuda for ActivationCuda
+{
     pub fn forward(&mut self, str_ptr_in: String) -> String
     {        
         if !self.ptrs_allocated
