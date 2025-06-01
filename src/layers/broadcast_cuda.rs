@@ -1,7 +1,10 @@
 
-use crate::{cuda_bridge::{broadcast_2d_to_3d, sum_axis}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, set_zero_counter, string_to_ptr}};
+use crate::{
+    cuda_bridge::{broadcast_2d_to_3d, sum_axis}, 
+    neuralnet::TraversePtrs, 
+    pointer_ops::{counter_is_zero, increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct BroadcastCuda
 {
