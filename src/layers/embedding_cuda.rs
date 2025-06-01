@@ -154,18 +154,19 @@ impl LayerCuda for Embedding2DCuda
         println!("{:?}", self.weight_tensors.weight);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return self.vocab_size * self.embedding_len;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
-        self.embedding_lookup_mat = cuda_ptr_to_array(string_to_ptr(&self.embedding_lookup_ptr), &[1, self.vocab_size, self.embedding_len]);
         //free_cuda_array(string_to_ptr(&self.embedding_lookup_ptr));
         //free_cuda_array(string_to_ptr(&self.embedding_lookup_grad_ptr));
-
-        self.embedding_ptr_allocated = false;
+        self.weight_tensors.weight = cuda_ptr_to_vec(
+            self.parameter_ptrs.weight_ptr, 
+            1 * self.vocab_size * self.embedding_len
+        );
     }
 
     pub fn set_ptrs_allocated(&mut self)
