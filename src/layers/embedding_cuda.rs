@@ -49,137 +49,59 @@ impl Embedding2DCuda
 impl LayerCuda for Embedding2DCuda
 {
     // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, str_ptr_in: String) -> String
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
-        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
-
-        ////println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
-        if !self.embedding_ptr_allocated
+        if !self.allocation_status.ptrs_allocated
         {   
-            if !self.embedding_mat_initialised
+
+            let embedding_lookup_len: u32 = (1 * self.vocab_size * self.embedding_len) as u32;
+            if !self.allocation_status.arrays_allocated
             {   
-                let mut embedding_mat: Array3<f32> = Array3::zeros((1, self.vocab_size, self.embedding_len));
-                /*
-                for i in 0..rows
-                {
-                    for j in (0..cols).step_by(2)
-                    {
-                        pos_encoding_mat[(0, i, j)] = ((i as f32) / (10.0_f32.powf((2.0 * j as f32) / (cols as f32)))).sin();
-                        if j < cols - 1
-                        {
-                            pos_encoding_mat[(0, i, j + 1)] = ((i as f32) / (10.0_f32.powf((2.0 * j as f32) / (cols as f32)))).cos();
-                        }
-                    }
-                }
-                */
-                
                 let range: f32 = (6.0 / ((self.embedding_len + self.embedding_len) as f32)).sqrt();
-                embedding_mat.map_mut(|v: &mut f32| *v = rand::thread_rng().gen_range(-range..range));
-
-                self.embedding_lookup_mat = embedding_mat.into_dyn();
-
-                self.embedding_mat_initialised = true;
+                self.weight_tensors.weight = random_float_vec(
+                    1 * self.vocab_size * self.embedding_len, 
+                    -range, range
+                );
             }
 
-            self.embedding_lookup_ptr = array_to_cuda_ptr_str(&mut self.embedding_lookup_mat);
-            self.embedding_lookup_grad_ptr = new_cuda_ptr_str(&[1, self.vocab_size, self.embedding_len]);
-            self.embedding_lookup_velocity_ptr = new_cuda_ptr_str(&[1, self.vocab_size, self.embedding_len]);
-            self.embedding_lookup_momentum_ptr = new_cuda_ptr_str(&[1, self.vocab_size, self.embedding_len]);
-            self.embedding_lookup_grad_count_ptr = new_cuda_ptr_str(&[1, self.vocab_size, self.embedding_len]);
-            self.embedding_lookup_grad_temp_ptr = new_cuda_ptr_str(&[1, self.vocab_size, self.embedding_len]);
+            self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
+            self.parameter_ptrs.weight_grad_ptr = new_cuda_array(embedding_lookup_len);
+            self.parameter_ptrs.weight_vel_ptr = new_cuda_array(embedding_lookup_len);
+            self.parameter_ptrs.weight_moment_ptr = new_cuda_array(embedding_lookup_len);
+            self.embedding_lookup_grad_count_ptr = new_cuda_array(embedding_lookup_len);
+            self.embedding_lookup_grad_temp_ptr = new_cuda_array(embedding_lookup_len);
 
-            init_layer_connections(
-                &mut self.backward_count, &str_ptr_in, 
-                &mut self.backward_count_prev, &mut self.input_ptr, 
-                &mut self.input_grad_ptr, &mut self.output_ptr, 
-                &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                &[self.out_shape.0, self.out_shape.1, self.out_shape.2]
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2) as usize
             );
 
-            // initialise input pointer, set the input as the result pointer from previous layer
-            // tensor struct at this stage will contain the result ptr of the previous layer
-            ////////////////////////////////////////////////////////////////
-            //self.input_ptr = input.get_ptr_as_str();
-            //self.input_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            //////////////////////////////////////////////////////////////////
-
-            // initialise the result tensor/pointer
-            //self.result_ptr = new_cuda_ptr_str(&[1, input_shape[2], self.embedding_len]);
-            //self.result_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
-            
-            //self.input_grads_ptr = new_cuda_ptr_str(input_shape);
-            //self.output_grads_ptr = new_cuda_ptr_str(&[1, input_shape[2], self.embedding_len]);
-
-            //self.in_shape = (input_shape[0], input_shape[1], input_shape[2]);
-            //self.out_shape = (1, input_shape[2], self.embedding_len);
-
-            self.embedding_ptr_allocated = true;
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
-
-        //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
-
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let embedding_lookup_ptr: *mut f32 = string_to_ptr(&self.embedding_lookup_ptr);
-        let result_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
 
         ////println!("{:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
         ////println!("{:?}", cuda_ptr_to_array(embedding_lookup_ptr, &[1, self.vocab_size, self.embedding_len]));
         ////println!("{:?}", self.embedding_lookup_mat);
         ////println!("{:?}", cuda_ptr_to_array(result_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
 
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //{
         embedding_forward(
-            input_ptr, self.seq_len, 
-            embedding_lookup_ptr, self.vocab_size, self.embedding_len, 
-            result_ptr
+            self.io_ptrs.input_ptr, self.seq_len, 
+            self.parameter_ptrs.weight_ptr, self.vocab_size, self.embedding_len, 
+            self.io_ptrs.output_ptr
         );
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
 
         //println!("{:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
         //println!("{:?}", cuda_ptr_to_array(embedding_lookup_ptr, &[1, self.vocab_size, self.embedding_len]));
         //println!("{:?}", cuda_ptr_to_array(result_ptr, &[1, self.in_shape.2, self.embedding_len]));
 
-        return self.output_traverse_ptr.clone();
-
-        ////println!("{:?}", cuda_ptr_to_array(pos_encoding_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        //exit(1);
-        //}
-        //else
-        //{
-        //    matmul_add_bias(
-        //        input_ptr, batch as u32, rows as u32, cols as u32, 
-        //        weight_ptr, batch as u32, cols as u32, self.n_out as u32,
-        //        result_ptr, bias_ptr
-        //    );
-        //}
-        //let end = start.elapsed();
-        ////println!("dense: {:.6}", end.as_secs_f64());
-
-        ////println!("-----------------------------");
-        ////println!("{:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        ////println!("{:?}", cuda_ptr_to_array(embedding_lookup_ptr, &[1, self.vocab_size, self.embedding_len]));
-        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-        // current pointer is already recorded by previous layer, don't free
-        //input.set_ptr(result_ptr, vec![self.out_shape.0, self.out_shape.1, self.out_shape.2]);
-
-        ////println!("{:?}", cuda_ptr_to_array(result_ptr, &[1, self.seq_len, self.embedding_len]));
-        ////println!("-----------------------------");
-        //exit(1);
-        // previous pointer will be recorded in previous layer
-
+        return self.io_ptrs.output_traverse_ptr;
     }
 
     pub fn backward(&mut self)
