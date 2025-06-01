@@ -86,28 +86,6 @@ impl BatchTransposeCuda
         //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.2, self.shape.1]));
 
         return self.output_traverse_ptr.clone();
-        //element_op_3d_ret(result_ptr, input_ptr, weight_ptr, 2, self.shape.0, self.shape.1, self.shape.2);
-
-        //element_op_3d_inplace(
-        //    result_ptr, bias_ptr, 
-        //    0, 
-        //    self.shape.0, self.shape.1, self.shape.2
-        //);
-
-        //println!("-----------------------------");
-        //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[batch, rows, cols]));
-        //println!("weights: {:?}\n", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-        // current pointer is already recorded by previous layer, don't free
-        //input.set_ptr(result_ptr, vec![self.shape.0, self.shape.1, self.shape.2]);
-
-        //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //exit(1);
-        //println!("-----------------------------");
-        //exit(1);
-        // previous pointer will be recorded in previous layer
-
     }
 
     pub fn backward(&mut self)
