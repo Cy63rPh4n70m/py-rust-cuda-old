@@ -5,57 +5,11 @@ use crate::{cuda_bridge::transpose_2d, pointer_ops::{increment_counter, init_lay
 #[derive(Serialize, Deserialize)]
 pub struct BatchTransposeCuda
 {
-    pub shape: (usize, usize, usize),
-    //pub io_ptrs: HashMap<String, String>,
-
-    //pub weights: ArrayD<f32>,
-
-    //pub weight_shift: f32,
-    //pub range: f32,
-
-    //pub weight_ptr: String,
-    //pub weight_shifted_ptr: String,
-    //pub weight_act_ptr: String,
-    //pub weight_gradients_ptr: String,
-    //pub weight_gradients_temp_ptr: String,
-    //pub weight_vel_ptr: String,
-    //pub weight_act_grad_ptr: String,
-    //pub biases_ptr: String,
-    //pub bias_gradients_ptr: String,
-    //pub bias_vel_ptr: String,
-
-    //pub dropout_mask_ptr: String,
-    //pub rand_state_v_ptr: String,
-
-    //pub dropout_rate: f32,
-
-    //pub lr: f32,
-    //pub l2: f32,
-    //pub op: i32,
-
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub output_traverse_ptr: String,
+    pub io_ptrs: IOPtrs,
+    pub allocation_states: AllocationStatus,
 
     pub batch_size: f32,
     pub count: u128,
-    pub zero_output: bool,
-    pub zero_weights: bool,
-    pub zero_input_grad: bool,
-    pub zero_weight_grad: bool,
-
-    //pub weight_ptr_allocated: bool, 
-    pub in_out_ptrs_allocated: bool,
-    //pub bias_ptr_allocated: bool, 
-    //pub weight_array_allocated: bool,
-    //pub bias_array_allocated: bool,
-    //pub grads_ptr_allocated: bool,
 }
 impl BatchTransposeCuda
 {
