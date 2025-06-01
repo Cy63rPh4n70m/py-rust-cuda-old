@@ -1,8 +1,10 @@
 use ndarray::{Array3, ArrayD, IxDyn};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 
 use crate::{cuda_bridge::{embedding_backward, embedding_forward, gradient_desc_3d}, pointer_ops::{array_to_cuda_ptr_str, cuda_ptr_to_array, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
+    cuda_bridge::{embedding_backward, embedding_forward, gradient_desc_3d}, 
+    pointer_ops::{array_to_cuda_ptr_str, cuda_ptr_to_array, init_trav_in_ptrs, 
+        new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
 #[derive(Serialize, Deserialize)]
 pub struct Embedding2DCuda
