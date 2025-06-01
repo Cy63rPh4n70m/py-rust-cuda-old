@@ -6,7 +6,7 @@ use crate::{
     pointer_ops::{array_to_cuda_ptr_str, cuda_ptr_to_array, init_trav_in_ptrs, 
         new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
 pub struct Embedding2DCuda
 {
@@ -45,7 +45,10 @@ impl Embedding2DCuda
             batch_size: 0.0,
         }
     }
+}
 
+impl LayerCuda for Embedding2DCuda
+{
     // supports batch matrix multiplication unlike cpu
     pub fn forward(&mut self, str_ptr_in: String) -> String
     {
