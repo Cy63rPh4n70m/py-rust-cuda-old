@@ -117,69 +117,27 @@ impl LayerCuda for BroadcastCuda
         // calculate bias gradients
     }
 
-    pub fn update_params(&mut self)
+    fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
     {   
-        /*
-        let weight_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("weight").unwrap());
-        let weight_grad_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("weight_grad").unwrap());
-        let weight_vel_ptr: *mut f32 = string_to_ptr(&self.weight_vel_ptr);
-
-        //scalar_op_3d_inplace(weight_grad_ptr, self.lr, 2, self.shape.0, self.shape.2, self.shape.2);
-        //scalar_op_3d_inplace(bias_grad_ptr, self.lr, 2, self.shape.0, self.shape.1, self.shape.2);
-        //element_op_3d_inplace(weight_ptr, weight_grad_ptr, 1, self.shape.0, self.shape.2, self.shape.2);
-        //element_op_3d_inplace(bias_ptr, bias_grad_ptr, 1, self.shape.0, self.shape.1, self.shape.2);
-        gradient_desc_3d_dense(
-            self.lr, self.l2,
-            weight_ptr, weight_grad_ptr, weight_vel_ptr,self.shape.0, self.shape.1, self.shape.2,
-            weight_ptr, weight_grad_ptr, weight_vel_ptr, self.shape.0, self.shape.1, self.shape.2,
-            true, true, self.batch_size
-        );
-
-        //println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.shape.0, self.shape.2, self.shape.2]))
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
-        */
         self.batch_size = 0.0;
-
     }
 
-    pub fn zero_io(&mut self, io_ptr_name: &String)
-    {
-        //let io_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get(io_ptr_name).unwrap());
-
-        if io_ptr_name.contains("input")
-        {
-            //zeroes_3d_inplace(io_ptr, self.in_shape.0, self.in_shape.1, self.in_shape.2);
-            self.zero_input_grad = true;
-        }
-        
-        if io_ptr_name.contains("output")
-        {
-            //zeroes_3d_inplace(io_ptr, self.shape.0, self.shape.1, self.shape.2);
-            self.zero_output = true;
-        }
-    }
-
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: BROADCAST");
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
-        println!("Output shape: {:?}", self.shape);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Output shape: {:?}", self.io_ptrs.out_shape);
         println!("Axis: {}", self.axis);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return 0_usize;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
-        //self.weights = cuda_ptr_to_array(
-        //    string_to_ptr(self.io_ptrs.get("weight").unwrap()), 
-        //    &[self.shape.0, self.shape.1, self.shape.2]
-        //);
         //self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
         //free_cuda_array(string_to_ptr(&self.weight_ptr));
         //free_cuda_array(string_to_ptr(&self.biases_ptr));
@@ -189,11 +147,5 @@ impl LayerCuda for BroadcastCuda
         //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
         //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
         //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-        self.in_out_ptrs_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.in_out_ptrs_allocated = true;
     }
 }
