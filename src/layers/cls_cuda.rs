@@ -5,56 +5,12 @@ use crate::{cuda_bridge::copy_cuda_to_cuda, pointer_ops::{increment_counter, ini
 #[derive(Serialize, Deserialize)]
 pub struct CLSCuda
 {
-    pub shape: (usize, usize, usize),
-    //pub io_ptrs: HashMap<String, String>,
+    pub io_ptrs: IOPtrs,
+    pub allocation_status: AllocationStatus,
 
-    //pub weights: ArrayD<f32>,
-
-    //pub weight_shift: f32,
-    //pub range: f32,
-
-    //pub weight_ptr: String,
-    //pub weight_shifted_ptr: String,
-    //pub weight_act_ptr: String,
-    //pub weight_gradients_ptr: String,
-    //pub weight_gradients_temp_ptr: String,
-    //pub weight_vel_ptr: String,
-    //pub weight_act_grad_ptr: String,
-    //pub biases_ptr: String,
-    //pub bias_gradients_ptr: String,
-    //pub bias_vel_ptr: String,
-
-    //pub dropout_mask_ptr: String,
-    //pub rand_state_v_ptr: String,
-
-    //pub dropout_rate: f32,
-
-    //pub lr: f32,
-    //pub l2: f32,
-    //pub op: i32,
     pub token_idx: usize,
-
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub output_traverse_ptr: String,
-
     pub batch_size: f32,
     pub count: u128,
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
-
-    //pub weight_ptr_allocated: bool, 
-    pub in_out_ptrs_allocated: bool,
-    //pub bias_ptr_allocated: bool, 
-    //pub weight_array_allocated: bool,
-    //pub bias_array_allocated: bool,
-    //pub grads_ptr_allocated: bool,
 }
 impl CLSCuda
 {
@@ -66,57 +22,14 @@ impl CLSCuda
     {
         return Self
         {
-            //io_ptrs,
-            //weights,
-            //weight_ptr: "".to_string(),
-            //weight_shifted_ptr: "".to_string(),
-            //weight_act_ptr: "".to_string(),
-            //weight_gradients_ptr: "".to_string(),
-            //weight_gradients_temp_ptr: "".to_string(),
-            //weight_vel_ptr: "".to_string(),
-            //weight_act_grad_ptr: "".to_string(),
-
-            //dropout_mask_ptr: "".to_string(),
-            //rand_state_v_ptr: "".to_string(),
-            //dropout_result_ptr: "".to_string(),
-
-            //dropout_rate,
-            //op,
+            io_ptrs: IOPtrs::new(
+                (in_batch, in_rows, in_cols), 
+                (in_batch, 1, in_cols)
+            ),
+            allocation_status: AllocationStatus::new(),
             token_idx,
-
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
-
-            //biases,
-            //biases_ptr: "".to_string(),
-            //bias_gradients_ptr: "".to_string(),
-            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
-            //broadcast_array_ptr: "".to_string(),
-
-            //activation,
-            //result_ptr_t: "".to_string(),
-            //range,
-            shape: (in_batch, in_rows, in_cols),
-            zero_output: true,
-            zero_input_grad: false,
-            //out_shape,
             batch_size: 0.0,
             count: 0,
-            //lr,
-            //l2,
-            //weight_ptr_allocated: false, 
-            in_out_ptrs_allocated: false,
-            //bias_ptr_allocated: false,
-            //weight_array_allocated: false,
-            //bias_array_allocated: false,
-            //grads_ptr_allocated: false,
         }
     }
 
