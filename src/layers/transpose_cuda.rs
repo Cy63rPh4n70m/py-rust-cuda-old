@@ -27,6 +27,10 @@ impl BatchTransposeCuda
         }
     }
 
+}
+
+impl LayerCuda for BatchTransposeCuda
+{
     // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
