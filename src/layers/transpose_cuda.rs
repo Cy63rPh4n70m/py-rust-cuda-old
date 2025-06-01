@@ -87,12 +87,12 @@ impl LayerCuda for BatchTransposeCuda
         self.batch_size = 0.0;
     }
 
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: BATCH_TRANSPOSE");
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
-        println!("Input shape: {:?}", self.shape);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Input shape: {:?}", self.io_ptrs.in_shape);
     }
 
     pub fn get_param_count(&self) -> usize
