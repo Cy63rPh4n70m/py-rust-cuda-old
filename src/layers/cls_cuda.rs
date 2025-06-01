@@ -66,57 +66,12 @@ impl LayerCuda for CLSCuda
 
     }
 
-    pub fn backward(&mut self)
+    fn backward(&mut self, _use_dropout: bool)
     {
-        //let input_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("input").unwrap());
-        //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
-        //let weight_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("weight").unwrap());
-        //let weight_t_ptr: *mut f32 = string_to_ptr(&self.weight_t_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        //let weight_grad_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("weight_grad").unwrap());
-        //let weight_grad_temp_ptr: *mut f32 = string_to_ptr(&self.weight_gradients_temp_ptr);
-        let original_grads: *mut f32 = string_to_ptr(&self.output_grad_ptr);
+        let chosen_dst_ptr: *mut f32 = unsafe { self.io_ptrs.input_grad_ptr.add(self.token_idx * self.io_ptrs.in_shape.2) };
+        copy_cuda_to_cuda(chosen_dst_ptr, self.io_ptrs.output_grad_ptr, &[self.io_ptrs.in_shape.2]);
 
-        //let mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-
-        //println!("=========================================================");
-        //println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("\nweights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("\nmatmul result: {:?}", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-
-        // calculate gradient for bias
-        //copy_cuda_to_cuda(
-        //    bias_grad_ptr, original_grads, 
-        //    &[self.shape.0, self.shape.1, self.shape.2]
-        //);
-
-        /*
-        // calculate gradient for weights (broadcast multiplying original_grads along axis)
-        element_op_3d_ret(
-            weight_grad_temp_ptr, 
-            original_grads, input_ptr, 2, 
-            self.shape.0, self.shape.1, self.shape.2
-        );
-        element_op_3d_inplace(weight_grad_ptr, weight_grad_temp_ptr, 0, self.shape.0, self.shape.1, self.shape.2);
-
-        //activation3d_cuda_backward(
-        //    weight_grad_ptr, weight_shifted_ptr, weight_act_grad_ptr, 
-        //    self.shape.0 as u32, self.shape.1 as u32, self.shape.2 as u32, 
-        //    "softplus"
-        //);
-        
-        // calculate gradient for input (elementwise multiplication followed by summation along axis)
-        element_op_3d_ret(
-            input_grad_ptr, 
-            original_grads, weight_ptr, 2, 
-            self.shape.0, self.shape.1, self.shape.2
-        );
-        */
-
-        let chosen_dst_ptr: *mut f32 = unsafe { input_grad_ptr.add(self.token_idx * self.shape.2) };
-        copy_cuda_to_cuda(chosen_dst_ptr, original_grads, &[self.shape.2]);
-
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
 
         self.batch_size += 1.0;
         
@@ -131,28 +86,6 @@ impl LayerCuda for CLSCuda
         //println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("=========================================================");
         //exit(1);      
-        // calculate summed respect to bias
-        // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
 
     pub fn update_params(&mut self)
