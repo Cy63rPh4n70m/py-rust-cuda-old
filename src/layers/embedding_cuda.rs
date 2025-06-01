@@ -10,38 +10,17 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
 pub struct Embedding2DCuda
 {
-    pub in_shape: (usize, usize, usize),
-    pub out_shape: (usize, usize, usize),
-
-    //pub io_ptrs: HashMap<String, String>,
+    pub io_ptrs: IOPtrs,
+    pub parameter_ptrs: ParameterPtrs,
+    pub allocation_status: AllocationStatus,
+    pub weight_tensors: WeightTensors,
 
     pub vocab_size: usize,
     pub embedding_len: usize,
     pub seq_len: usize,
 
-    pub embedding_lookup_mat: ArrayD<f32>,
-    pub embedding_lookup_ptr: String,
-    pub embedding_lookup_grad_ptr: String,
-    pub embedding_lookup_velocity_ptr: String,
-    pub embedding_lookup_momentum_ptr: String,
-    pub embedding_lookup_grad_count_ptr: String,
-    pub embedding_lookup_grad_temp_ptr: String,
-
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub output_traverse_ptr: String,
-    
-    pub embedding_ptr_allocated: bool, 
-    pub embedding_mat_initialised: bool,
-
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
+    pub embedding_lookup_grad_count_ptr: *mut f32,
+    pub embedding_lookup_grad_temp_ptr: *mut f32,
 
     pub batch_size: f32,
 }
