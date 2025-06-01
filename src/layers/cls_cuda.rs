@@ -1,8 +1,9 @@
-use serde::{Deserialize, Serialize};
+use crate::{
+    cuda_bridge::copy_cuda_to_cuda, neuralnet::TraversePtrs, 
+    pointer_ops::{increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
-use crate::{cuda_bridge::copy_cuda_to_cuda, pointer_ops::{increment_counter, init_layer_connections, set_zero_counter, string_to_ptr}};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
-#[derive(Serialize, Deserialize)]
 pub struct CLSCuda
 {
     pub io_ptrs: IOPtrs,
