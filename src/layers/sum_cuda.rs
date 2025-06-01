@@ -9,20 +9,8 @@ pub struct SumCuda
     pub allocation_status: AllocationStatus,
 
     pub axis: i32,
-
     pub batch_size: f32,
     pub count: u128,
-    pub zero_output: bool,
-    pub zero_weights: bool,
-    pub zero_input_grad: bool,
-    pub zero_weight_grad: bool,
-
-    //pub weight_ptr_allocated: bool, 
-    pub in_out_ptrs_allocated: bool,
-    //pub bias_ptr_allocated: bool, 
-    //pub weight_array_allocated: bool,
-    //pub bias_array_allocated: bool,
-    //pub grads_ptr_allocated: bool,
 }
 impl SumCuda
 {
