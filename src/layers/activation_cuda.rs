@@ -89,8 +89,8 @@ impl LayerCuda for ActivationCuda
         //exit(1);
     }
 
-    pub fn update_params(&mut self)
-    {
+    fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
+    { 
         //let a: *mut f32 = string_to_ptr(&self.a_ptr);
         //let b: *mut f32 = string_to_ptr(&self.b_ptr);
         //let a_grads: *mut f32 = string_to_ptr(&self.a_grads_ptr);
