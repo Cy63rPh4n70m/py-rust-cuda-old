@@ -168,9 +168,4 @@ impl LayerCuda for Embedding2DCuda
             1 * self.vocab_size * self.embedding_len
         );
     }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.embedding_ptr_allocated = true;
-    }
 }
