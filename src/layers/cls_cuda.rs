@@ -32,8 +32,11 @@ impl CLSCuda
             count: 0,
         }
     }
+}
 
-    pub fn forward(&mut self, str_ptr_in: String) -> String
+impl LayerCuda for CLSCuda
+{
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
 
