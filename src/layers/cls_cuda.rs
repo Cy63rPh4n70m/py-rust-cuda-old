@@ -134,6 +134,7 @@ impl CLSCuda
                 &mut self.input_grad_ptr, &mut self.output_ptr, 
                 &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
                 &[1, 1, self.shape.2]
+                (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2) as usize
             );
             self.in_out_ptrs_allocated = true;
         }
