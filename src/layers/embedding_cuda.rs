@@ -1,9 +1,4 @@
-use ndarray::{Array3, ArrayD, IxDyn};
-use rand::Rng;
-
 use crate::{
-    cuda_bridge::{embedding_backward, embedding_forward, gradient_desc_3d, new_cuda_array}, math_functions::random_float_vec, neuralnet::TraversePtrs, pointer_ops::{array_to_cuda_ptr_str, cuda_ptr_to_array, init_trav_in_ptrs, 
-        new_cuda_ptr_str, set_zero_counter, string_to_ptr, vec_to_cuda_ptr}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
