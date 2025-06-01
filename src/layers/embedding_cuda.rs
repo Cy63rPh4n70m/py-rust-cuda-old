@@ -1,4 +1,8 @@
 use crate::{
+    cuda_bridge::{embedding_backward, embedding_forward, gradient_desc_3d, new_cuda_array}, 
+    math_functions::random_float_vec, neuralnet::TraversePtrs, 
+    pointer_ops::{cuda_ptr_to_vec, init_trav_in_ptrs, set_zero_counter, vec_to_cuda_ptr}
+};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
