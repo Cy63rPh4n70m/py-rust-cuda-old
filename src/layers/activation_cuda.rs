@@ -91,35 +91,7 @@ impl LayerCuda for ActivationCuda
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
     { 
-        //let a: *mut f32 = string_to_ptr(&self.a_ptr);
-        //let b: *mut f32 = string_to_ptr(&self.b_ptr);
-        //let a_grads: *mut f32 = string_to_ptr(&self.a_grads_ptr);
-        //let b_grads: *mut f32 = string_to_ptr(&self.b_grads_ptr);
-        //let a_vel_grads: *mut f32 = string_to_ptr(&self.a_vel_ptr);
-        //let b_vel_grads: *mut f32 = string_to_ptr(&self.b_vel_ptr);
-        
-        //gradient_desc_3d_dense(
-        //    self.lr, self.l2,
-        //    a, a_grads, a_vel_grads, self.tensor_shape[0], self.tensor_shape[1], self.tensor_shape[2], 
-        //    b, b_grads, b_vel_grads, self.tensor_shape[0], self.tensor_shape[1], self.tensor_shape[2], 
-        //    false, false, self.batch_size
-        //);
         self.batch_size = 0.0;
-    }
-    
-    pub fn zero_io(&mut self, ptr_name: &String)
-    {
-        //let io_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get(ptr_name).unwrap());
-        //zeroes_3d_inplace(io_ptr, self.shape.0, self.shape.1, self.shape.2);
-
-        if ptr_name.contains("output")
-        {
-            self.zero_output = true;
-        }
-        else if ptr_name.contains("input")
-        {
-            self.zero_input_grad = true;
-        }
     }
 
     pub fn details(&self)
