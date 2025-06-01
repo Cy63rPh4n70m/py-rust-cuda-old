@@ -144,18 +144,6 @@ impl LayerCuda for Embedding2DCuda
         self.batch_size = 0.0;
     }
 
-    pub fn zero_io(&mut self, io_ptr_name: &String)
-    {
-        if io_ptr_name.contains("input")
-        {
-            self.zero_input_grad = true;
-        }
-        else if io_ptr_name.contains("output")
-        {
-            self.zero_output = true;
-        }
-    }
-
     pub fn details(&self)
     {
         println!("Layer type: Embedding2D");
