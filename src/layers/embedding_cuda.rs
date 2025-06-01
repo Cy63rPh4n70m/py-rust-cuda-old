@@ -31,36 +31,17 @@ impl Embedding2DCuda
     {
         return Self
         {
-            //io_ptrs,
-
             embedding_len,
             vocab_size,
             seq_len,
 
-            in_shape: (1, 1, seq_len),
-            out_shape: (1, seq_len, embedding_len),
-            embedding_lookup_mat: ArrayD::zeros(IxDyn(&[1, vocab_size, embedding_len])),
-            embedding_lookup_ptr: "".to_string(),
-            embedding_lookup_grad_ptr: "".to_string(),
-            embedding_lookup_velocity_ptr: "".to_string(),
-            embedding_lookup_momentum_ptr: "".to_string(),
-            embedding_lookup_grad_count_ptr: "".to_string(),
-            embedding_lookup_grad_temp_ptr: "".to_string(),
-
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
-
-            embedding_ptr_allocated: false,
-            embedding_mat_initialised: false,
-            zero_output: true,
-            zero_input_grad: false,
+            io_ptrs: IOPtrs::new((1, 1, seq_len), (1, seq_len, embedding_len)),
+            parameter_ptrs: ParameterPtrs::new(),
+            weight_tensors: WeightTensors::new(),
+            allocation_status: AllocationStatus::new(),
+            
+            embedding_lookup_grad_count_ptr: std::ptr::null_mut(),
+            embedding_lookup_grad_temp_ptr: std::ptr::null_mut(),
             batch_size: 0.0,
         }
     }
