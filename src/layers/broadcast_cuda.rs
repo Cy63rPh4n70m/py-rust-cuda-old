@@ -60,7 +60,7 @@ impl LayerCuda for BroadcastCuda
                 &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
                 &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
                 &mut self.io_ptrs.output_traverse_ptr, 
-                (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.2 * self.io_ptrs.out_shape.1) as usize
+                (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2) as usize
             );
 
             self.allocation_status.ptrs_allocated = true;
