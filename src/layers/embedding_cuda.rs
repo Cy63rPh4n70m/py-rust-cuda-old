@@ -144,14 +144,14 @@ impl LayerCuda for Embedding2DCuda
         self.batch_size = 0.0;
     }
 
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: Embedding2D");
-        println!("Shape: {:?}", self.in_shape);
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", &self.input_ptr, &self.input_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", &self.output_ptr, &self.output_grad_ptr);
+        println!("Vocab shape: {:?}", (1, self.vocab_size, self.embedding_len));
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Embedding matrix:");
-        println!("{:?}", self.embedding_lookup_mat);
+        println!("{:?}", self.weight_tensors.weight);
     }
 
     pub fn get_param_count(&self) -> usize
