@@ -6,7 +6,7 @@ use crate::{cuda_bridge::transpose_2d, pointer_ops::{increment_counter, init_lay
 pub struct BatchTransposeCuda
 {
     pub io_ptrs: IOPtrs,
-    pub allocation_states: AllocationStatus,
+    pub allocation_status: AllocationStatus,
 
     pub batch_size: f32,
     pub count: u128,
@@ -21,7 +21,7 @@ impl BatchTransposeCuda
         return Self
         {
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, cols, rows)),
-            allocation_states: AllocationStatus::new(),
+            allocation_status: AllocationStatus::new(),
             batch_size: 0.0,
             count: 0,
         }
@@ -31,7 +31,7 @@ impl BatchTransposeCuda
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
 
-        if !self.allocation_states.ptrs_allocated
+        if !self.allocation_status.ptrs_allocated
         {   
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
