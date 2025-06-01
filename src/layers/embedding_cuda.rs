@@ -6,6 +6,8 @@ use crate::{
     pointer_ops::{array_to_cuda_ptr_str, cuda_ptr_to_array, init_trav_in_ptrs, 
         new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
+use super::layer_cuda::{AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
+
 pub struct Embedding2DCuda
 {
     pub in_shape: (usize, usize, usize),
