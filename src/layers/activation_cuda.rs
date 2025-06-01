@@ -58,30 +58,23 @@ impl LayerCuda for ActivationCuda
         return self.io_ptrs.output_traverse_ptr;
     }
 
-    pub fn backward(&mut self)
+    fn backward(&mut self, _use_dropout: bool)
     {
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let input_grads_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        let output_grads_ptr: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-        //let a: *mut f32 = string_to_ptr(&self.a_ptr);
-        //let b: *mut f32 = string_to_ptr(&self.b_ptr);
-        //let a_grads: *mut f32 = string_to_ptr(&self.a_grads_ptr);
-        //let b_grads: *mut f32 = string_to_ptr(&self.b_grads_ptr);
-
         ////println!("current_grads: {:?}", cuda_ptr_to_array(grad_ptr.get_ptr(), grad_ptr.get_shape()));
         ////println!("recored_inputs: {:?}", cuda_ptr_to_array(input_ptr, grad_ptr.get_shape()));
 
-        //let start: Instant = Instant::now();
-        if counter_is_zero(&self.backward_count_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = true;
         }
         activation3d_cuda_backward(
-            input_grads_ptr, input_ptr, output_grads_ptr, 
-            self.shape.0 as u32, self.shape.1 as u32, self.shape.2 as u32, 
-            &self.activation_str, self.scale, self.zero_input_grad
+            self.io_ptrs.input_grad_ptr, self.io_ptrs.input_ptr, 
+            self.io_ptrs.output_grad_ptr, 
+            self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.1 as u32, 
+            self.io_ptrs.in_shape.2 as u32, 
+            &self.activation_str, self.scale, self.allocation_status.zero_input_grad
         );
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
 
         self.batch_size += 1.0;
 
