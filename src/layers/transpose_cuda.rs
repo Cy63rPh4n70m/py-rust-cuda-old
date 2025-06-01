@@ -51,12 +51,12 @@ impl BatchTransposeCuda
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
         );
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
 
         //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.2, self.shape.1]));
 
-        return self.output_traverse_ptr.clone();
+        return self.io_ptrs.output_traverse_ptr;
     }
 
     pub fn backward(&mut self)
