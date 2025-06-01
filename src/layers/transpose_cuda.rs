@@ -18,62 +18,12 @@ impl BatchTransposeCuda
         batch: usize, rows: usize, cols: usize
     ) -> Self
     {
-        //let weights: ArrayD<f32> = ArrayD::zeros(IxDyn(&[0]));
-
         return Self
         {
-            //io_ptrs,
-            //weights,
-            //weight_ptr: "".to_string(),
-            //weight_shifted_ptr: "".to_string(),
-            //weight_act_ptr: "".to_string(),
-            //weight_gradients_ptr: "".to_string(),
-            //weight_gradients_temp_ptr: "".to_string(),
-            //weight_vel_ptr: "".to_string(),
-            //weight_act_grad_ptr: "".to_string(),
-
-            //dropout_mask_ptr: "".to_string(),
-            //rand_state_v_ptr: "".to_string(),
-            //dropout_result_ptr: "".to_string(),
-
-            //dropout_rate,
-            //op,
-
-            //biases,
-            //biases_ptr: "".to_string(),
-            //bias_gradients_ptr: "".to_string(),
-            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
-            //broadcast_array_ptr: "".to_string(),
-
-            //activation,
-            //result_ptr_t: "".to_string(),
-            //range,
-            shape: (batch, rows, cols),
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
-            
-            zero_output: true,
-            zero_weights: false,
-            zero_input_grad: false,
-            zero_weight_grad: false,
-            //out_shape,
+            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
+            allocation_states: AllocationStatus::new(),
             batch_size: 0.0,
             count: 0,
-            //lr,
-            //l2,
-            //weight_ptr_allocated: false, 
-            in_out_ptrs_allocated: false,
-            //bias_ptr_allocated: false,
-            //weight_array_allocated: false,
-            //bias_array_allocated: false,
-            //grads_ptr_allocated: false,
         }
     }
 
