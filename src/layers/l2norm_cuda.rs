@@ -115,8 +115,7 @@ impl LayerCuda for L2NormCuda
         //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
-
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: L2Norm");
         println!("Input Shape: {:?}", self.shape);
@@ -124,12 +123,12 @@ impl LayerCuda for L2NormCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", &self.output_ptr, &self.output_grads_ptr);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return 0_usize;
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
         self.ptrs_allocated = false;
     }
