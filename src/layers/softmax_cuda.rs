@@ -1,7 +1,7 @@
 
 use crate::{cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, scalar_op_3d_inplace, softmax_forward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct SoftmaxCuda
 {
@@ -28,7 +28,7 @@ impl SoftmaxCuda
         {   
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
             allocation_status: AllocationStatus::new(),
-            
+
             input_exp_ptr: std::ptr::null_mut(),
             exp_sum_ptr: std::ptr::null_mut(),
             input_grad_temp: std::ptr::null_mut(),
@@ -40,7 +40,10 @@ impl SoftmaxCuda
             batch_size: 0.0
         }
     }
+}
 
+impl LayerCuda for SoftmaxCuda
+{
     // supports batch matrix multiplication unlike cpu
     pub fn forward(&mut self, str_ptr_in: String) -> String
     {
