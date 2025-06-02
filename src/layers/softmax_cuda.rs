@@ -91,21 +91,11 @@ impl LayerCuda for SoftmaxCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        //if self.input_grad_temp.contains("none")
-        //{
-        //    self.input_grad_temp = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
-        //}
-        //let input_exp_ptr: *mut f32 = string_to_ptr(&self.input_exp_ptr);
-        //let exp_sum_ptr: *mut f32 = string_to_ptr(&self.exp_sum_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        let input_grad_temp: *mut f32 = string_to_ptr(&self.input_grad_temp);
-        let original_grads: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-
-        copy_cuda_to_cuda(input_grad_temp, original_grads, &[self.shape.0, self.shape.1, self.shape.2]);
+        copy_cuda_to_cuda(self.input_grad_temp, self.io_ptrs.output_grad_ptr, &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]);
         // for temperature
         scalar_op_3d_inplace(
-            input_grad_temp, self.temperature, 3, 
-            self.shape.0, self.shape.1, self.shape.2
+            self.input_grad_temp, self.temperature, 3, 
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
         );
 
         if counter_is_zero(&self.backward_count_prev)
