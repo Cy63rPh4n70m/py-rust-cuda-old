@@ -12,65 +12,6 @@ def load_lib(path) -> dict:
     func_create_model.restype = C.c_void_p
     func_dict.update({"create_model": func_create_model})
 
-    func_add_dense_layer = lib.add_dense_layer
-    func_add_dense_layer.argtypes = [C.c_void_p, C.c_uint64, C.c_float, C.c_float]
-    func_dict.update({"add_dense_layer": func_add_dense_layer})
-
-    func_add_activation = lib.add_activation
-    func_add_activation.argtypes = [C.c_void_p, C.c_char_p, C.c_float]
-    func_dict.update({"add_activation": func_add_activation})
-
-    func_add_adaptive_activation = lib.add_adaptive_activation
-    func_add_adaptive_activation.argtypes = [C.c_void_p, C.c_char_p, C.c_float]
-    func_dict.update({"add_adaptive_activation": func_add_adaptive_activation})
-
-    func_add_dropout_layer = lib.add_dropout_layer
-    func_add_dropout_layer.argtypes = [C.c_void_p, C.c_float]
-    func_dict.update({"add_dropout_layer": func_add_dropout_layer})
-
-    func_add_norm_layer = lib.add_norm_layer
-    func_add_norm_layer.argtypes = [C.c_void_p, C.c_float, C.c_uint64]
-    func_dict.update({"add_norm_layer": func_add_norm_layer})
-
-    func_add_reward_layer = lib.add_reward_layer
-    func_add_reward_layer.argtypes = [C.c_void_p, C.c_float, C.c_float]
-    func_dict.update({"add_reward_layer": func_add_reward_layer})
-
-    func_add_conv2d_layer = lib.add_conv2d_layer
-    func_add_conv2d_layer.argtypes = [
-        C.c_void_p, 
-        C.c_uint64, C.c_uint64,
-        C.c_uint64, C.c_uint64, C.c_float]
-    func_dict.update({"add_conv2d_layer": func_add_conv2d_layer})
-
-    func_add_flatten_layer = lib.add_flatten_layer
-    func_add_flatten_layer.argtypes = [C.c_void_p]
-    func_dict.update({"add_flatten_layer": func_add_flatten_layer})
-
-    func_add_recurrent_dense_layer = lib.add_recurrent_dense_layer
-    func_add_recurrent_dense_layer.argtypes = [C.c_void_p, C.c_uint64, C.c_uint64, C.c_bool, C.c_float]
-    func_dict.update({"add_recurrent_dense_layer": func_add_recurrent_dense_layer})
-
-    func_add_temporal_dense_layer = lib.add_temporal_dense_layer
-    func_add_temporal_dense_layer.argtypes = [
-        C.c_void_p, 
-        C.c_uint64, C.c_uint64,
-        C.c_uint64,
-        C.c_char_p, C.c_char_p, 
-        C.c_bool, C.c_float
-    ]
-    func_dict.update({"add_temporal_dense_layer": func_add_temporal_dense_layer})
-
-    func_add_attention_layer = lib.add_attention_layer
-    func_add_attention_layer.argtypes = [
-        C.c_void_p, C.c_uint64, 
-        C.c_uint64, C.c_uint64, C.c_uint64,
-        C.c_char_p, 
-        C.c_bool, C.c_float, C.c_float
-    ]
-    func_dict.update({"add_attention_layer": func_add_attention_layer})
-
-    ###################################################################
     # CUDA layers
     func_add_dense_cuda_layer = lib.add_dense_cuda_layer
     func_add_dense_cuda_layer.argtypes = [
@@ -261,6 +202,7 @@ def load_lib(path) -> dict:
     func_details.argtypes = [C.c_void_p]
     func_dict.update({"details": func_details})
 
+    '''
     func_save = lib.save
     func_save.argtypes = [C.c_void_p, C.c_char_p, C.c_bool]
     func_dict.update({"save": func_save})
@@ -269,6 +211,7 @@ def load_lib(path) -> dict:
     func_load.argtypes = [C.c_char_p]
     func_load.restype = C.c_void_p
     func_dict.update({"load": func_load})
+    '''
 
     ################################################################
     # for storage buffer
