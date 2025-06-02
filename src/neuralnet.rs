@@ -267,7 +267,7 @@ impl NeuralNet
         let mut count: usize = 0;
         for (i, layer_name) in self.backward_path.iter().enumerate()
         {
-            let layer: &CudaLayer = self.all_cuda_layers.get(layer_name).unwrap();
+            let layer: &Box<dyn LayerCuda> = self.all_cuda_layers.get(layer_name).unwrap();
             println!("LAYER_ID: {:?} | LAYER_N: {}", layer_name, i);
             layer.details();
             println!("TOTAL_LAYER_PARAM_COUNT: {:?}", layer.get_param_count());
