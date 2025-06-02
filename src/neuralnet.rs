@@ -291,7 +291,7 @@ impl NeuralNet
     {
         for (cuda_layer_name, _) in &mut self.backward_path_container
         {
-            let cuda_layer: &mut CudaLayer = self.all_cuda_layers.get_mut(cuda_layer_name).unwrap();
+            let cuda_layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(cuda_layer_name).unwrap();
             cuda_layer.move_ptrs_to_arrays();
         }
     }
