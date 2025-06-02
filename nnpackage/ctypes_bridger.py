@@ -9,7 +9,6 @@ def load_lib(path) -> dict:
 
     lib = C.cdll.LoadLibrary(path)
     func_create_model = lib.create_model
-    func_create_model.argtypes = [C.c_bool]
     func_create_model.restype = C.c_void_p
     func_dict.update({"create_model": func_create_model})
 

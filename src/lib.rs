@@ -28,13 +28,12 @@ mod cuda_bridge;
 mod pointer_ops;
 
 #[no_mangle]
-pub unsafe extern "C" fn create_model(use_cuda: bool) -> *mut c_void
+pub unsafe extern "C" fn create_model() -> *mut c_void
 {
     std::env::set_var("RUST_BACKTRACE", "full");
-    let nn_model: NeuralNet = NeuralNet::new(use_cuda);
+    let nn_model: NeuralNet = NeuralNet::new();
     return Box::into_raw(Box::new(nn_model)) as *mut c_void;
 }
-
 
 // CUDA layers
 #[no_mangle]
