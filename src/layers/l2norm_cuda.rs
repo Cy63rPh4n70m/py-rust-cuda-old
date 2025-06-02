@@ -1,28 +1,15 @@
 use crate::{cuda_bridge::{l2norm_backward, l2norm_forward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
+use super::layer_cuda::{AllocationStatus, IOPtrs};
+
 pub struct L2NormCuda
 {
-    pub shape: (usize, usize, usize),
-
-    pub input_ptr: String,
-    pub input_pow2_ptr: String,
-    pub power_sum: String,
-    pub output_ptr: String,
-    pub input_grads_ptr: String,
-    pub output_grads_ptr: String,
+    pub io_ptrs: IOPtrs,
+    pub allocation_status: AllocationStatus,
     
-    pub output_traverse_ptr: String,
-    
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
-    pub scale_ptr: String,
-    pub scale_vec: Vec<f32>,
-    
+    pub input_pow2_ptr: *mut f32,
+    pub power_sum: *mut f32,
     pub batch_size: f32,
-    pub zero_input_grad: bool,
-
-    pub ptrs_allocated: bool, 
 }
 impl L2NormCuda
 {
