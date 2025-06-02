@@ -74,34 +74,21 @@ impl LayerCuda for L2NormCuda
         return self.io_ptrs.output_traverse_ptr;
     }
 
-    pub fn backward(&mut self)
+    fn backward(&mut self, _use_dropout: bool)
     {
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let output_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-        let power_sum: *mut f32 = string_to_ptr(&self.power_sum);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grads_ptr);
-        let original_grads: *mut f32 = string_to_ptr(&self.output_grads_ptr);
-
-        //println!("=========================================================");
-        //println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        //println!("\npower_sum: {:?}", cuda_ptr_to_array(power_sum, &[self.in_shape.0, self.in_shape.2, 1]));
-        //println!("\nmatmul result: {:?}", cuda_ptr_to_array(result_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-
-        //let start: Instant = Instant::now();
-
-        if counter_is_zero(&self.backward_count_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = true;
         }
 
         l2norm_backward(
-            original_grads, 
-            self.shape.0, self.shape.1, self.shape.2, 
-            power_sum, input_ptr, output_ptr, 
-            input_grad_ptr, self.zero_input_grad
+            self.io_ptrs.output_grad_ptr, 
+            self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
+            self.power_sum, self.io_ptrs.input_ptr, self.io_ptrs.output_ptr, 
+            self.io_ptrs.input_grad_ptr, self.allocation_status.zero_input_grad
         );
         self.batch_size += 1.0;
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
 
         //println!("{:?}", cuda_ptr_to_array(original_grads, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("{:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
@@ -117,28 +104,6 @@ impl LayerCuda for L2NormCuda
         //println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
         //println!("=========================================================");
         //exit(1);      
-        // calculate summed respect to bias
-        // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.in_shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
     
     pub fn update_params(&mut self)
