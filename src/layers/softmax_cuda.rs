@@ -137,28 +137,6 @@ impl LayerCuda for SoftmaxCuda
         ////println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
         ////println!("=========================================================");
         //exit(1);      
-        // calculate summed respect to bias
-        // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.in_shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
 
     fn update_params(&mut self)
