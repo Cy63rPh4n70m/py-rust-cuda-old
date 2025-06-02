@@ -3,7 +3,7 @@ use std::process::exit;
 use std::collections::HashMap;
 use std::os::raw::c_char;
 
-use crate::cuda_bridge::{copy_host_to_cuda, softmax_ce_loss};
+use crate::cuda_bridge::{copy_host_to_cuda, new_cuda_array, softmax_ce_loss};
 use crate::layers::layer_cuda::LayerCuda;
 use crate::pointer_ops::{char_ptr_to_string, new_cuda_ptr_str};
 use crate::{cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host}, 
@@ -163,30 +163,29 @@ impl NeuralNet
 
     pub fn ce_loss_fn(&mut self, output_name: String, target_classes: *mut f32, batch: usize, rows: usize, cols: usize) -> *mut f32
     {
-        let traverse_ptr_str: &String = self.output_traverse_ptrs.get(&output_name).unwrap();
-        let traverse_struct: *mut TraversePtrs = string_to_traverse_ptr(&traverse_ptr_str);
+        let traverse_ptr: &*mut TraversePtrs = self.output_traverse_ptrs.get(&output_name).unwrap();
 
         if !self.output_softmax_ce_data.contains_key(&output_name)
         {
             let (loss_vals_host, loss_vals_cuda) = 
                 create_host_and_cuda_ptr(batch * rows);
-            let classes: String = new_cuda_ptr_str(&[batch, rows, 1]);
+            let classes:*mut f32  = new_cuda_array((batch * rows * 1) as u32);
             unsafe
             {
                 self.output_softmax_ce_data.insert(
                     output_name.clone(), 
-                    (loss_vals_host, loss_vals_cuda, classes, ptr_to_string((*traverse_struct).grad_ptr)
-                ));
+                    (loss_vals_host, loss_vals_cuda, classes, (**traverse_ptr).grad_ptr)
+                );
             }
         }
 
-        let softmax_ce_data: &(String, String, String, String) = 
+        let softmax_ce_data: &(*mut f32, *mut f32, *mut f32, *mut f32) = 
             self.output_softmax_ce_data.get(&output_name).unwrap();
-        let pred: *mut f32 = unsafe {(*traverse_struct).ptr};
-        let loss_vals_host: *mut f32 = string_to_ptr(&softmax_ce_data.0);
-        let loss_vals_cuda: *mut f32 = string_to_ptr(&softmax_ce_data.1);
-        let classes: *mut f32 = string_to_ptr(&softmax_ce_data.2);
-        let grad_ptr: *mut f32 = string_to_ptr(&softmax_ce_data.3);
+        let pred: *mut f32 = unsafe {(**traverse_ptr).ptr};
+        let loss_vals_host: *mut f32 = softmax_ce_data.0;
+        let loss_vals_cuda: *mut f32 = softmax_ce_data.1;
+        let classes: *mut f32 = softmax_ce_data.2;
+        let grad_ptr: *mut f32 = softmax_ce_data.3;
 
         copy_host_to_cuda(classes, target_classes, (batch * rows) as u32);
         
