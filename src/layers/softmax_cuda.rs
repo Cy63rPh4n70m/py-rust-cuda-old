@@ -256,7 +256,7 @@ impl LayerCuda for SoftmaxCuda
         }
     }
 
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: Softmax");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
