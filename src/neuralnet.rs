@@ -1,15 +1,11 @@
 use core::f32;
 use std::process::exit;
 use std::collections::HashMap;
-use std::os::raw::c_char;
 
 use crate::cuda_bridge::{copy_host_to_cuda, new_cuda_array, softmax_ce_loss};
 use crate::layers::layer_cuda::LayerCuda;
-use crate::pointer_ops::{char_ptr_to_string, new_cuda_ptr_str, set_zero_counter};
-use crate::{cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host}, 
-    pointer_ops::{create_counting_ptr_str, create_host_and_cuda_ptr, 
-        new_traverse_str_ptr, ptr_to_string, string_to_ptr, string_to_traverse_ptr}};
-
+use crate::pointer_ops::{create_host_and_cuda_ptr, set_zero_counter};
+use crate::cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host};
 // used in replacement of transferring arrays by value, more efficient
 pub struct TraversePtrs
 {
