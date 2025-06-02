@@ -4,12 +4,16 @@
 use std::{ffi::{c_char, CStr}, os::raw::c_void, process::exit};
 
 use io_functions::{load_model, save_model};
-use layers::{activation_cuda::ActivationCuda, broadcast_cuda::BroadcastCuda, cls_cuda::CLSCuda, conv2d_cuda::Conv2dCuda, cuda_layer_enum::CudaLayer, dense_cuda::DenseCuda, dropout_cuda::DropoutCuda, elementwise_cuda::ElementwiseCuda, embedding_cuda::Embedding2DCuda, l2norm_cuda::L2NormCuda, softmax_cuda::SoftmaxCuda, sum_cuda::SumCuda, transpose_cuda::BatchTransposeCuda};
+use layers::{
+    activation_cuda::ActivationCuda, broadcast_cuda::BroadcastCuda, 
+    cls_cuda::CLSCuda, conv2d_cuda::Conv2dCuda, dense_cuda::DenseCuda, 
+    dropout_cuda::DropoutCuda, elementwise_cuda::ElementwiseCuda, 
+    embedding_cuda::Embedding2DCuda, l2norm_cuda::L2NormCuda, 
+    softmax_cuda::SoftmaxCuda, sum_cuda::SumCuda, transpose_cuda::BatchTransposeCuda};
     
 use math_functions::{get_loss_deriv_from_str, get_loss_from_str};
 use ndarray::{ArrayD, IxDyn};
 use neuralnet::{NeuralNet, TraversePtrs};
-use pointer_ops::{char_ptr_to_string, string_to_char_ptr};
 use storage::{ae_buf::AutoencoderBuf, storage_seq_buf::ReplayBuf};
 use types::{LossFn, LossFnDeriv};
 
