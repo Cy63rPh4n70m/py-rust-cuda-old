@@ -147,9 +147,9 @@ impl LayerCuda for SoftmaxCuda
     fn details(&self)
     {
         println!("Layer type: Softmax");
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
-        println!("Shape: {:?}", self.shape);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Shape: {:?}", self.io_ptrs.in_shape);
     }
 
     fn move_ptrs_to_arrays(&mut self)
