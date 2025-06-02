@@ -45,7 +45,7 @@ impl SoftmaxCuda
 impl LayerCuda for SoftmaxCuda
 {
     // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, str_ptr_in: String) -> String
+    fn forward(&mut self, str_ptr_in: String) -> String
     {
         ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
         let batch: usize = self.shape.0;
@@ -156,12 +156,12 @@ impl LayerCuda for SoftmaxCuda
         // previous pointer will be recorded in previous layer
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return 0_usize;
     }
 
-    pub fn backward(&mut self)
+    fn backward(&mut self)
     {
         //if self.input_grad_temp.contains("none")
         //{
@@ -237,7 +237,7 @@ impl LayerCuda for SoftmaxCuda
         */
     }
 
-    pub fn update_params(&mut self)
+    fn update_params(&mut self)
     {
         self.batch_size = 0.0;
     }
@@ -264,7 +264,7 @@ impl LayerCuda for SoftmaxCuda
         println!("Shape: {:?}", self.shape);
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
         //free_cuda_array(string_to_ptr(&self.norm_ptr));
         self.ptrs_allocated = false;
