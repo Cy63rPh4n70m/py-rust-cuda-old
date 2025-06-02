@@ -128,9 +128,4 @@ impl LayerCuda for L2NormCuda
     {
         self.ptrs_allocated = false;
     }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.ptrs_allocated = true;
-    }
 }
