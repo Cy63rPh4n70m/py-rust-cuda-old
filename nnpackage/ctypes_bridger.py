@@ -152,12 +152,12 @@ def load_lib(path) -> dict:
     func_pass_to_input.argtypes = [
         C.c_void_p, C.c_char_p, np.ctypeslib.ndpointer(np.float32), C.c_uint32
     ]
-    func_pass_to_input.restype = C.POINTER(C.c_char)
+    func_pass_to_input.restype = C.c_void_p
     func_dict.update({"pass_to_input": func_pass_to_input})
 
     func_pass_to_output = lib.pass_to_output
     func_pass_to_output.argtypes = [
-        C.c_void_p, C.c_char_p, C.c_char_p, C.c_uint32
+        C.c_void_p, C.c_char_p, C.c_void_p, C.c_uint32
     ]
     func_pass_to_output.restype = C.POINTER(C.c_float)
     func_dict.update({"pass_to_output": func_pass_to_output})

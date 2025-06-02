@@ -8,7 +8,7 @@ use layers::{activation_cuda::ActivationCuda, broadcast_cuda::BroadcastCuda, cls
     
 use math_functions::{get_loss_deriv_from_str, get_loss_from_str};
 use ndarray::{ArrayD, IxDyn};
-use neuralnet::NeuralNet;
+use neuralnet::{NeuralNet, TraversePtrs};
 use pointer_ops::{char_ptr_to_string, string_to_char_ptr};
 use storage::{ae_buf::AutoencoderBuf, storage_seq_buf::ReplayBuf};
 use types::{LossFn, LossFnDeriv};
@@ -208,22 +208,23 @@ pub unsafe extern "C" fn add_cls_cuda_layer(
 #[no_mangle]
 pub unsafe extern "C" fn pass_to_input(
     vp: *mut c_void, name: *mut c_char, array_ptr: *mut f32, array_len: usize
-) -> *mut c_char
+) -> *mut c_void
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(name).to_str().unwrap().to_string();
-    let traverse_ptr_str: String = (*nn).pass_to_input(name, array_ptr, array_len);
+    let traverse_ptr: *mut TraversePtrs = (*nn).pass_to_input(name, array_ptr, array_len);
     //println!("{:?}", traverse_ptr_str);
-    return string_to_char_ptr(&traverse_ptr_str);
+    return traverse_ptr as *mut c_void;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pass_to_output(
-    vp: *mut c_void, name: *mut c_char, traverse_ptr: *mut c_char, array_len: usize
+    vp: *mut c_void, name: *mut c_char, traverse_v_ptr: *mut c_void, array_len: usize
 ) -> *mut f32
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(name).to_str().unwrap().to_string();
+    let traverse_ptr: *mut TraversePtrs = traverse_v_ptr as *mut TraversePtrs;
     let array_output: *mut f32 = (*nn).pass_to_output(name, traverse_ptr, array_len);
     return array_output;
 }
