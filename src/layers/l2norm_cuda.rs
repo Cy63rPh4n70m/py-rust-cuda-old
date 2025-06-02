@@ -114,9 +114,9 @@ impl LayerCuda for L2NormCuda
     fn details(&self)
     {
         println!("Layer type: L2Norm");
-        println!("Input Shape: {:?}", self.shape);
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", &self.input_ptr, &self.input_grads_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", &self.output_ptr, &self.output_grads_ptr);
+        println!("Input Shape: {:?}", self.io_ptrs.in_shape);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
     }
 
     fn get_param_count(&self) -> usize
