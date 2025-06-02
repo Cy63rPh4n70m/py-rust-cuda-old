@@ -1,8 +1,13 @@
 
 use crate::{cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, scalar_op_3d_inplace, softmax_forward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
+use super::layer_cuda::{AllocationStatus, IOPtrs};
+
 pub struct SoftmaxCuda
 {
+    pub io_ptrs: IOPtrs,
+    pub allocation_status: AllocationStatus,
+    
     pub input_exp_ptr: *mut f32,
     pub exp_sum_ptr: *mut f32,
     pub broadcast_temp_ptr: *mut f32,
