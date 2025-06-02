@@ -89,7 +89,7 @@ impl LayerCuda for SoftmaxCuda
         return 0_usize;
     }
 
-    fn backward(&mut self)
+    fn backward(&mut self, _use_dropout: bool)
     {
         //if self.input_grad_temp.contains("none")
         //{
