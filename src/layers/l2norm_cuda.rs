@@ -106,13 +106,9 @@ impl LayerCuda for L2NormCuda
         //exit(1);      
     }
     
-    pub fn update_params(&mut self)
-    {   
+    fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
+    {    
         self.batch_size = 0.0;
-
-        //println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]))
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
     fn details(&self)
