@@ -1,10 +1,12 @@
 use std::os::raw::c_void;
 
-use serde::{Deserialize, Serialize};
+use crate::{
+    cuda_bridge::{copy_cuda_to_cuda, dropout_backward, dropout_forward, init_random_states, new_cuda_array}, 
+    neuralnet::TraversePtrs, 
+    pointer_ops::{increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
-use crate::{cuda_bridge::{copy_cuda_to_cuda, dropout_backward, dropout_forward, init_random_states}, pointer_ops::{increment_counter, init_layer_connections, new_cuda_ptr_str, ptr_to_string_void, set_zero_counter, string_to_ptr, string_to_ptr_void}};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
-#[derive(Serialize, Deserialize)]
 pub struct DropoutCuda
 {
     pub name: String,
