@@ -26,7 +26,7 @@ pub struct NeuralNet
     pub input_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub output_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub input_grad_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
-    pub output_grad_ptrs: HashMap<String, (*mut f32, *mut f32,  u32)>,
+    pub output_grad_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub input_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
     pub output_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
     pub output_softmax_ce_data: HashMap<String, (*mut f32, *mut f32, *mut f32, *mut f32)>, // (loss_vals_host, loss_vals_cuda, int_classes, output_grad)
@@ -64,41 +64,30 @@ impl NeuralNet
         };
     }
 
-    //pub fn set_input_conv(&mut self, shape: (usize, usize, usize))
-    //{
-    //    self.conv_input_shape = shape;
-    //}
-
     pub fn add_cuda_layer(&mut self, name: String, layer: Box<dyn LayerCuda>)
     {
         self.all_cuda_layers.insert(name, layer);
     }
 
-    pub fn pass_to_input(&mut self, name: String, array_ptr: *mut f32, array_len: usize) -> String
+    pub fn pass_to_input(&mut self, name: String, array_ptr: *mut f32, array_len: usize) -> *mut TraversePtrs
     {
-        if !self.backward_pass_count_set
-        {
-            self.backward_pass_count = create_counting_ptr_str();
-            self.backward_pass_count_set = true;
-        }
-
         if !self.input_ptrs.contains_key(&name)
         {
             self.input_ptrs.insert(
                 name.clone(), 
-                (String::from("none"), String::from("none"), array_len as u32)
+                (std::ptr::null_mut(), std::ptr::null_mut(), array_len as u32)
             );
             self.input_grad_ptrs.insert(
                 name.clone(), 
-                (String::from("none"), String::from("none"), array_len as u32)
+                (std::ptr::null_mut(), std::ptr::null_mut(), array_len as u32)
             );
         }
 
         // host pointer is pinned, gpu pointer can access directly
-        let ptrs: &mut (String, String, u32) = self.input_ptrs.get_mut(&name).unwrap();
-        let grad_ptrs: &mut (String, String, u32) = self.input_grad_ptrs.get_mut(&name).unwrap();
+        let ptrs: &mut (*mut f32, *mut f32, u32) = self.input_ptrs.get_mut(&name).unwrap();
+        let grad_ptrs: &mut (*mut f32, *mut f32, u32) = self.input_grad_ptrs.get_mut(&name).unwrap();
 
-        if ptrs.0 == "none"
+        if ptrs.0.is_null()
         {
             let (host_ptr_str, cuda_ptr_str) = create_host_and_cuda_ptr(array_len);
             let (host_ptr_str_grad, cuda_ptr_str_grad) = create_host_and_cuda_ptr(array_len);
@@ -108,17 +97,22 @@ impl NeuralNet
             grad_ptrs.0 = host_ptr_str_grad; 
             grad_ptrs.1 = cuda_ptr_str_grad;
 
-            let traverse_str_ptr: String = new_traverse_str_ptr(
-                string_to_ptr(&ptrs.1), 
-                string_to_ptr(&grad_ptrs.1),
-                self.backward_pass_count.clone()
+            let traverse_ptr: *mut TraversePtrs = Box::into_raw(
+                Box::new(
+                    TraversePtrs 
+                    {
+                        ptr: ptrs.1, 
+                        grad_ptr: grad_ptrs.1, 
+                        backward_pass_count: self.backward_pass_count
+                    }
+                )
             );
 
-            self.input_traverse_ptrs.insert(name.clone(), traverse_str_ptr);
+            self.input_traverse_ptrs.insert(name.clone(), traverse_ptr);
         }
 
-        copy_host_to_host(string_to_ptr(&ptrs.0), array_ptr, &[array_len]);
-        let traverse_ptr_str: &String = self.input_traverse_ptrs.get(&name).unwrap();
+        copy_host_to_host(ptrs.0, array_ptr, &[array_len]);
+        let traverse_ptr_str: &*mut TraversePtrs = self.input_traverse_ptrs.get(&name).unwrap();
         return traverse_ptr_str.clone();
     }
 

@@ -194,15 +194,12 @@ pub fn string_to_tensor_ptr(string: &String) -> *mut ArrayD<f32>
     return ptr_string as *mut ArrayD<f32>;
 }
 
-pub fn create_host_and_cuda_ptr(flattened_shape: usize) -> (String, String)
+pub fn create_host_and_cuda_ptr(flattened_shape: usize) -> (*mut f32, *mut f32)
 {
     let pinned_ptr: *mut f32 = new_cpu_pinned_array(flattened_shape as u32);
     let cuda_ptr: *mut f32 = cuda_ptr_from_pinned(pinned_ptr);
 
-    let host_ptr_str: String = ptr_to_string(pinned_ptr);
-    let cuda_ptr_str: String = ptr_to_string(cuda_ptr);
-
-    return (host_ptr_str, cuda_ptr_str)
+    return (pinned_ptr, cuda_ptr)
 }
 
 pub fn traverse_ptr_to_string(ptr: *mut TraversePtrs) -> String
@@ -226,13 +223,12 @@ pub fn get_traverse_str_ptr(string: &String) -> (*mut f32, *mut f32, String)
     return (ptr, grad_ptr, backward_count_ptr);
 }
 
-pub fn new_traverse_str_ptr(ptr: *mut f32, grad_ptr: *mut f32, backward_pass_count: String) -> String
+pub fn new_traverse_ptr(ptr: *mut f32, grad_ptr: *mut f32, backward_pass_count: *mut usize) -> *mut TraversePtrs
 {
     let traverse_ptrs_struct: Box<TraversePtrs> = Box::new(TraversePtrs {ptr, grad_ptr, backward_pass_count});
 
     let traverse_raw_ptr: *mut TraversePtrs = Box::into_raw(traverse_ptrs_struct);
-    let str_ptr: String = traverse_ptr_to_string(traverse_raw_ptr);
-    return str_ptr;
+    return traverse_raw_ptr;
 }
 
 pub fn create_counting_ptr_str() -> String
