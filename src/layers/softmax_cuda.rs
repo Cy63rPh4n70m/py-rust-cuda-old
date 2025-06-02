@@ -154,7 +154,5 @@ impl LayerCuda for SoftmaxCuda
 
     fn move_ptrs_to_arrays(&mut self)
     {
-        //free_cuda_array(string_to_ptr(&self.norm_ptr));
-        self.ptrs_allocated = false;
     }
 }
