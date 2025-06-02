@@ -5,7 +5,7 @@ use std::os::raw::c_char;
 
 use crate::cuda_bridge::{copy_host_to_cuda, new_cuda_array, softmax_ce_loss};
 use crate::layers::layer_cuda::LayerCuda;
-use crate::pointer_ops::{char_ptr_to_string, new_cuda_ptr_str};
+use crate::pointer_ops::{char_ptr_to_string, new_cuda_ptr_str, set_zero_counter};
 use crate::{cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host}, 
     pointer_ops::{create_counting_ptr_str, create_host_and_cuda_ptr, 
         new_traverse_str_ptr, ptr_to_string, string_to_ptr, string_to_traverse_ptr}};
@@ -246,21 +246,20 @@ impl NeuralNet
         // backpropagate through layers, reverse of the layer path
         for layer_name in self.backward_path.iter().rev()
         {
-            let layer: &mut CudaLayer = self.all_cuda_layers.get_mut(layer_name).unwrap();
+            let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(layer_name).unwrap();
             //println!("started {:?}", layer_name);
             layer.backward(self.apply_dropout);
             //println!("completed {:?}", layer_name);
         }
-            //increment_counter(&self.backward_pass_count);
     }
 
     pub fn update_params(&mut self, layer_id: &str, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {
-        let layer: &mut CudaLayer = self.all_cuda_layers.get_mut(layer_id).unwrap();
+        let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(layer_id).unwrap();
         layer.update_params(optimizer_type, lr, l2, alpha, beta);
 
         // zero the main backward pass count, 
-        //set_zero_counter(&self.backward_pass_count);
+        set_zero_counter(self.backward_pass_count);
     }
     
     pub fn update_loss_queue(&mut self, loss: f32, _maxlen: usize)
