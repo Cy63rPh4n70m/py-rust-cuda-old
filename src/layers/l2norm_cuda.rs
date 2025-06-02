@@ -1,8 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 use crate::{cuda_bridge::{l2norm_backward, l2norm_forward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
-#[derive(Serialize, Deserialize)]
 pub struct L2NormCuda
 {
     pub shape: (usize, usize, usize),
