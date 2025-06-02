@@ -40,101 +40,57 @@ impl DropoutCuda
 
 impl LayerCuda for DropoutCuda
 {
-    fn forward(&mut self, str_ptr_in: String, use_dropout: bool) -> String
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, use_dropout: bool) -> *mut TraversePtrs
     {
-        //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
-        let batch: usize = self.shape.0;
-        let rows: usize = self.shape.1;
-        let cols: usize = self.shape.2;
+        let batch: usize = self.io_ptrs.in_shape.0;
+        let rows: usize = self.io_ptrs.in_shape.1;
+        let cols: usize = self.io_ptrs.in_shape.2;
 
-        //println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
-        if !self.mask_ptr_allocated
+        if !self.allocation_status.ptrs_allocated
         {   
-            self.dropout_mask_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-
-            // initialise input pointer, set the input as the result pointer from previous layer
-            // tensor struct at this stage will contain the result ptr of the previous layer
-            ////////////////////////////////////////////////////////////////
-            //self.input_ptr = input.get_ptr_as_str();
-            //self.input_t_ptr = new_cuda_ptr_str(&[batch, cols, rows]);
-            //////////////////////////////////////////////////////////////////
-
-            // initialise the result tensor/pointer
-            //self.result_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            //self.result_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
-            
-            //self.input_grads_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            //self.output_grads_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-
-            //self.shape = (batch, rows, cols);
+            self.dropout_mask_ptr = new_cuda_array((batch * rows * cols) as u32);
 
             // initialize the random states pointer
-            self.rand_state_v_ptr = ptr_to_string_void(init_random_states(batch, rows, cols));
+            self.rand_state_v_ptr = init_random_states(batch, rows, cols);
             
-            init_layer_connections(
-                &mut self.backward_count, &str_ptr_in, 
-                &mut self.backward_count_prev, &mut self.input_ptr, 
-                &mut self.input_grad_ptr, &mut self.output_ptr, 
-                &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                &[self.shape.0, self.shape.1, self.shape.2]
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2) as usize
             );
 
-            self.mask_ptr_allocated = true;
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
-
-        //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
-
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-        let rand_states_ptr: *mut c_void = string_to_ptr_void(&self.rand_state_v_ptr);
-        let result_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-        //copy_cuda_to_cuda(
-        //    input_ptr, 
-        //    input.get_ptr(), 
-        //    &[batch, rows, cols]
-        //);
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //{
-        //println!("{:?}", cuda_ptr_to_array(mask_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
+        
         if use_dropout
         {
             dropout_forward(
-                input_ptr, result_ptr, mask_ptr, rand_states_ptr,
-                self.shape.0, self.shape.1, self.shape.2, self.dropout_rate
+                self.io_ptrs.input_ptr, self.io_ptrs.output_ptr, self.dropout_mask_ptr, 
+                self.rand_state_v_ptr,
+                self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, 
+                self.io_ptrs.in_shape.2, 
+                self.dropout_rate
             );
 
             //println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
             //println!("{:?}", cuda_ptr_to_array(result_ptr, &[batch, rows, cols]));
             //exit(1);
-            // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-            // current pointer is already recorded by previous layer, don't free
-            //input.set_ptr(result_ptr, vec![batch, rows, cols]);
         }
         else
         {
             copy_cuda_to_cuda(
-                result_ptr, input_ptr, 
-                &[self.shape.0, self.shape.1, self.shape.2]
+                self.io_ptrs.output_ptr, self.io_ptrs.input_ptr, 
+                &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]
             );
         }
 
-        set_zero_counter(&self.backward_count);
+        set_zero_counter(self.io_ptrs.backward_count);
 
-        //println!("{:?}", self.output_traverse_ptr);
-
-        return self.output_traverse_ptr.clone();
+        return self.io_ptrs.output_traverse_ptr;
 
         //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
         //println!("-----------------------------");
