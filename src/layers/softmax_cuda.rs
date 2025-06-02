@@ -242,20 +242,6 @@ impl LayerCuda for SoftmaxCuda
         self.batch_size = 0.0;
     }
 
-    pub fn zero_io(&mut self, ptr_name: &String)
-    {
-        //let io_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get(ptr_name).unwrap());
-        //zeroes_3d_inplace(io_ptr, self.shape.0, self.shape.1, self.shape.2);
-        if ptr_name.contains("output")
-        {
-            self.zero_output = true;
-        }
-        else if ptr_name.contains("input")
-        {
-            self.zero_input_grad = true;
-        }
-    }
-
     fn details(&self)
     {
         println!("Layer type: Softmax");
@@ -268,10 +254,5 @@ impl LayerCuda for SoftmaxCuda
     {
         //free_cuda_array(string_to_ptr(&self.norm_ptr));
         self.ptrs_allocated = false;
-    }
-
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.ptrs_allocated = true;
     }
 }
