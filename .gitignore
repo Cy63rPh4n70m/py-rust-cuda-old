@@ -19,3 +19,4 @@ Cargo.lock
 /target
 /nnpackage/backend
 /nnpackage/__pycache__
+/__pycache__
