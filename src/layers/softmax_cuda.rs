@@ -74,71 +74,14 @@ impl LayerCuda for SoftmaxCuda
             self.allocation_status.arrays_allocated = true;
         }
 
-        //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
-
-        // convert strings to pointers
-        let input_ptr: *mut f32 = string_to_ptr(&self.input_ptr);
-        let input_exp_ptr: *mut f32 = string_to_ptr(&self.input_exp_ptr);
-        let exp_sum_ptr: *mut f32 = string_to_ptr(&self.exp_sum_ptr);
-        let broadcast_temp_ptr: *mut f32 = string_to_ptr(&self.broadcast_temp_ptr);
-        let result_ptr: *mut f32 = string_to_ptr(&self.output_ptr);
-
-        // data does not need to be copied as result ptr from previous layer
-        // is set as the input
-
-        // copy data to the input pointer, prevent reallocation
-        //copy_cuda_to_cuda(
-        //    input_ptr, 
-        //    input.get_ptr(), 
-        //    &[batch, rows, cols]
-        //);
-
-        // parallel perform matrix multiplication
-        // and sum with bias tensor
-        // result pointer updated
-        //let start: Instant = Instant::now();
-        //if self.use_tiled || !self.use_tiled
-        //{
-        ////println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
         softmax_forward(
-            input_ptr, input_exp_ptr, exp_sum_ptr,
-            result_ptr, broadcast_temp_ptr, self.temperature,
-            batch, rows, cols, self.zero_output
+            self.io_ptrs.input_ptr, self.input_exp_ptr, self.exp_sum_ptr,
+            self.io_ptrs.output_ptr, self.broadcast_temp_ptr, self.temperature,
+            batch, rows, cols, self.allocation_status.zero_output
         );
 
-        set_zero_counter(&self.backward_count);
-
-        //println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
-        //println!("{:?}\n", cuda_ptr_to_array(result_ptr, &[batch, rows, cols]));
-
-        return self.output_traverse_ptr.clone();
-        ////println!("{:?}", cuda_ptr_to_array(input_exp_ptr, &[batch, rows, cols]));
-        ////println!("{:?}", cuda_ptr_to_array(exp_sum_ptr, &[batch, rows, 1]));
-        ////println!("{:?}", cuda_ptr_to_array(result_ptr, &[batch, rows, cols]));
-        //exit(1);
-        //}
-        //else
-        //{
-        //    matmul_add_bias(
-        //        input_ptr, batch as u32, rows as u32, cols as u32, 
-        //        weight_ptr, batch as u32, cols as u32, self.n_out as u32,
-        //        result_ptr, bias_ptr
-        //    );
-        //}
-        //let end = start.elapsed();
-        ////println!("dense: {:.6}", end.as_secs_f64());
-
-        ////println!("-----------------------------");
-        ////println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
-        ////println!("{:?}", cuda_ptr_to_array(weight_ptr, &[batch, cols, self.n_out]));
-        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-        // current pointer is already recorded by previous layer, don't free
-        //input.set_ptr(result_ptr, vec![batch, rows, cols]);
-
-        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
-        ////println!("-----------------------------");
-        //exit(1);
-        // previous pointer will be recorded in previous layer
+        set_zero_counter(self.io_ptrs.backward_count);
+        return self.io_ptrs.output_traverse_ptr;
     }
 
     fn get_param_count(&self) -> usize
