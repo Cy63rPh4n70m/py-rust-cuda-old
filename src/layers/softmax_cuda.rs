@@ -98,15 +98,21 @@ impl LayerCuda for SoftmaxCuda
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
         );
 
-        if counter_is_zero(&self.backward_count_prev)
+        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            copy_cuda_to_cuda(input_grad_ptr, input_grad_temp, &[self.shape.0, self.shape.1, self.shape.2]);
+            copy_cuda_to_cuda(
+                self.io_ptrs.input_grad_ptr, self.input_grad_temp, 
+                &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]
+            );
         }
         else
         {
-            element_op_3d_inplace(input_grad_ptr, input_grad_temp, 0, self.shape.0, self.shape.1, self.shape.2);
+            element_op_3d_inplace(
+                self.io_ptrs.input_grad_ptr, self.input_grad_temp, 0, 
+                self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
+            );
         }
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
         self.batch_size += 1.0;
 
         ////println!("=========================================================");
