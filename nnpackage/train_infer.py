@@ -68,9 +68,6 @@ class Trainer:
             raise SystemExit()
         
         self.lib_funcs.get("update_params")(self.model, layer_id.encode(), optimizer_type, lr, l2, alpha, beta)
-
-    def update_loss_queue(self, loss: float, maxlen: int):
-        self.lib_funcs.get("update_loss_queue")(self.model, loss, maxlen)
         
     def calc_loss_and_grads(self, loss_type: str, pred: np.ndarray, actual: np.ndarray, flattened_len: int) -> tuple[float, np.ndarray]:
         pred = pred.astype(np.float32).flatten()
