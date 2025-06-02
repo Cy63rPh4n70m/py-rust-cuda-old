@@ -3,40 +3,16 @@ use crate::{cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, scalar_op_3d
 
 pub struct SoftmaxCuda
 {
-    pub shape: (usize, usize, usize),
-
-    //pub io_ptrs: HashMap<String, String>,
-    //pub input_ptr: String,
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
-    pub output_traverse_ptr: String,
-
-    pub input_exp_ptr: String,
-    pub exp_sum_ptr: String,
-    pub broadcast_temp_ptr: String,
-    //pub input_grads_ptr: String,
-    //pub output_grads_ptr: String,
+    pub input_exp_ptr: *mut f32,
+    pub exp_sum_ptr: *mut f32,
+    pub broadcast_temp_ptr: *mut f32,
     
-    //pub result_ptr: String,
-
-    pub scale_array: ArrayD<f32>,
     pub temperature: f32,
-    pub input_grad_temp: String,
-
-    pub zero_output: bool,
-    pub zero_input_grad: bool,
+    pub input_grad_temp: *mut f32,
 
     pub backward_passes_count: u128,
     pub count: u128,
     pub batch_size: f32,
-
-    pub ptrs_allocated: bool, 
 }
 impl SoftmaxCuda
 {
