@@ -222,15 +222,15 @@ impl NeuralNet
         //}
     }
 
-    pub fn forward(&mut self, layer_id: String, str_ptr_in: String, str_ptr_weight: String) -> String
+    pub fn forward(&mut self, layer_id: String, trav_in_ptr: *mut TraversePtrs, trav_weight_ptr: *mut TraversePtrs) -> *mut TraversePtrs
     {
         if !self.all_cuda_layers.contains_key(&layer_id)
         {
             println!("Error: Layer {:?} doesn't exist.", layer_id);
             exit(1);
         }
-        let layer: &mut CudaLayer = self.all_cuda_layers.get_mut(&layer_id).unwrap();
-        let new_traverse_ptr: String = layer.forward(str_ptr_in, str_ptr_weight, self.apply_dropout);
+        let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(&layer_id).unwrap();
+        let new_traverse_ptr: *mut TraversePtrs = layer.forward(trav_in_ptr, trav_weight_ptr, self.apply_dropout);
 
         if !self.backward_path_container.contains_key(&layer_id)
         {
