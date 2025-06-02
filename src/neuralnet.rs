@@ -6,7 +6,6 @@ use std::os::raw::c_char;
 use crate::cuda_bridge::{copy_host_to_cuda, softmax_ce_loss};
 use crate::pointer_ops::{char_ptr_to_string, new_cuda_ptr_str};
 use crate::{cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host}, 
-    layers::{cuda_layer_enum::CudaLayer}, 
     pointer_ops::{create_counting_ptr_str, create_host_and_cuda_ptr, 
         new_traverse_str_ptr, ptr_to_string, string_to_ptr, string_to_traverse_ptr}};
 
