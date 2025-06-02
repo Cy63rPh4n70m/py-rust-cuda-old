@@ -1,5 +1,8 @@
 
-use crate::{cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, scalar_op_3d_inplace, softmax_forward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
+use crate::{
+    cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, new_cuda_array, scalar_op_3d_inplace, softmax_forward}, 
+    neuralnet::TraversePtrs, 
+    pointer_ops::{counter_is_zero, increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
