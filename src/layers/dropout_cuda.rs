@@ -139,19 +139,15 @@ impl LayerCuda for DropoutCuda
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
     {    
         self.batch_size = 0.0;
-
-        //println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]))
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
     fn details(&self)
     {
         println!("Layer type: DROPOUT | Layer name: {:?}", self.name);
-        println!("Shape: {:?}", self.shape);
+        println!("Shape: {:?}", self.io_ptrs.in_shape);
         println!("Dropout rate: {:?}", self.dropout_rate);
-        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.input_ptr, self.input_grad_ptr);
-        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
     }
 
     fn get_param_count(&self) -> usize
@@ -161,11 +157,6 @@ impl LayerCuda for DropoutCuda
 
     fn move_ptrs_to_arrays(&mut self)
     {
-        self.mask_ptr_allocated = false;
-    }
 
-    pub fn set_ptrs_allocated(&mut self)
-    {
-        self.mask_ptr_allocated = true;
     }
 }
