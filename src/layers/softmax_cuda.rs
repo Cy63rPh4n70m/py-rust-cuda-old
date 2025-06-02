@@ -45,16 +45,15 @@ impl SoftmaxCuda
 impl LayerCuda for SoftmaxCuda
 {
     // supports batch matrix multiplication unlike cpu
-    fn forward(&mut self, str_ptr_in: String) -> String
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
-        ////println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
-        let batch: usize = self.shape.0;
-        let rows: usize = self.shape.1;
-        let cols: usize = self.shape.2;
+        let batch: usize = self.io_ptrs.in_shape.0;
+        let rows: usize = self.io_ptrs.in_shape.1;
+        let cols: usize = self.io_ptrs.in_shape.2;
 
-        ////println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
-        if !self.ptrs_allocated
+        let flattened_shape: u32 = (batch * rows * cols) as u32;
+        
+        if !self.allocation_status.ptrs_allocated
         {   
             // initialise input pointer, set the input as the result pointer from previous layer
             // tensor struct at this stage will contain the result ptr of the previous layer
