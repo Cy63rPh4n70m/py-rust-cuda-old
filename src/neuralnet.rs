@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::os::raw::c_char;
 
 use crate::cuda_bridge::{copy_host_to_cuda, softmax_ce_loss};
+use crate::layers::layer_cuda::LayerCuda;
 use crate::pointer_ops::{char_ptr_to_string, new_cuda_ptr_str};
 use crate::{cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host}, 
     pointer_ops::{create_counting_ptr_str, create_host_and_cuda_ptr, 
@@ -19,25 +20,16 @@ pub struct TraversePtrs
 
 pub struct NeuralNet
 {
-    pub all_cuda_layers: HashMap<String, CudaLayer>, // name -> layer
+    pub all_cuda_layers: HashMap<String, Box<dyn LayerCuda>>, // name -> layer
     pub apply_dropout: bool,
 
-    // name, cpu_pinned, gpu
-    pub input_ptrs: HashMap<String, (String, String, u32)>,
-    pub output_ptrs: HashMap<String, (String, String, u32)>,
-    pub input_grad_ptrs: HashMap<String, (String, String, u32)>,
-    pub output_grad_ptrs: HashMap<String, (String, String, u32)>,
-    pub input_traverse_ptrs: HashMap<String, String>,
-    pub output_traverse_ptrs: HashMap<String, String>,
-    pub output_softmax_ce_data: HashMap<String, (String, String, String, String)>, // (loss_vals_host, loss_vals_cuda, int_classes, output_grad)
-
-    pub input_ptrs_copy: HashMap<String, (String, String, u32)>,
-    pub output_ptrs_copy: HashMap<String, (String, String, u32)>,
-    pub input_grad_ptrs_copy: HashMap<String, (String, String, u32)>,
-    pub output_grad_ptrs_copy: HashMap<String, (String, String, u32)>,
-    pub input_traverse_ptrs_copy: HashMap<String, String>,
-    pub output_traverse_ptrs_copy: HashMap<String, String>,
-    pub output_softmax_ce_data_copy: HashMap<String, (String, String, String, String)>, // (loss_vals_host, loss_vals_cuda, int_classes, output_grad)
+    pub input_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
+    pub output_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
+    pub input_grad_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
+    pub output_grad_ptrs: HashMap<String, (*mut f32, *mut f32,  u32)>,
+    pub input_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
+    pub output_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
+    pub output_softmax_ce_data: HashMap<String, (*mut f32, *mut f32, *mut f32, *mut f32)>, // (loss_vals_host, loss_vals_cuda, int_classes, output_grad)
 
     // order of cuda layer names to call for forward or backward
     // booleans determine whether to initialize output/input grad to zero
@@ -45,18 +37,11 @@ pub struct NeuralNet
     pub backward_path: Vec<String>,
     pub backward_path_container: HashMap<String, bool>,
 
-    //pub input_ptrs_allocated: bool,
-    //pub grad_ptrs_allocated: bool,
-
-    pub global_lr: f32,
-    pub prev_loss: f32,
-
-    pub backward_pass_count: String,
-    pub backward_pass_count_set: bool
+    pub backward_pass_count: *mut usize,
 }
 impl NeuralNet
 {
-    pub fn new(use_cuda: bool) -> Self
+    pub fn new() -> Self
     {
         
         return Self
@@ -72,24 +57,10 @@ impl NeuralNet
             output_traverse_ptrs: HashMap::new(),
             output_softmax_ce_data: HashMap::new(),
 
-            input_ptrs_copy: HashMap::new(),
-            input_grad_ptrs_copy: HashMap::new(),
-            output_ptrs_copy: HashMap::new(),
-            output_grad_ptrs_copy: HashMap::new(),
-            input_traverse_ptrs_copy: HashMap::new(),
-            output_traverse_ptrs_copy: HashMap::new(),
-            output_softmax_ce_data_copy: HashMap::new(),
-
             backward_path: Vec::new(),
             backward_path_container: HashMap::new(),
             
-            //input_ptrs_allocated: false,
-            //grad_ptrs_allocated: false,
-            global_lr: 0.001,
-            prev_loss: -1.0,
-
-            backward_pass_count: String::new(),
-            backward_pass_count_set: false,
+            backward_pass_count: Box::into_raw(Box::new(0_usize)),
         };
     }
 
@@ -98,7 +69,7 @@ impl NeuralNet
     //    self.conv_input_shape = shape;
     //}
 
-    pub fn add_cuda_layer(&mut self, name: String, layer: CudaLayer)
+    pub fn add_cuda_layer(&mut self, name: String, layer: Box<dyn LayerCuda>)
     {
         self.all_cuda_layers.insert(name, layer);
     }
