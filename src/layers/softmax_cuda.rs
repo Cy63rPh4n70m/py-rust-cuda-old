@@ -1,10 +1,6 @@
 
-use ndarray::{ArrayD, IxDyn};
-use serde::{Deserialize, Serialize};
-
 use crate::{cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, scalar_op_3d_inplace, softmax_forward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
-#[derive(Serialize, Deserialize)]
 pub struct SoftmaxCuda
 {
     pub shape: (usize, usize, usize),
