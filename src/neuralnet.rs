@@ -206,15 +206,14 @@ impl NeuralNet
     pub fn pass_to_output_grad(&mut self, name: String, array_ptr: *mut f32, array_len: usize)
     {
         // host pointer is pinned, gpu pointer can access directly
-        let grad_ptrs: &(String, String, u32) = self.output_grad_ptrs.get(&name).unwrap();
-        copy_host_to_host(string_to_ptr(&grad_ptrs.0), array_ptr, &[array_len]);
+        let grad_ptrs: &(*mut f32, *mut f32, u32) = self.output_grad_ptrs.get(&name).unwrap();
+        copy_host_to_host(grad_ptrs.0, array_ptr, &[array_len]);
 
         // copy cuda data to traverse pointer stored
-        let traverse_ptr_str: &String = self.output_traverse_ptrs.get(&name).unwrap();
-        let traverse_struct: *mut TraversePtrs = string_to_traverse_ptr(&traverse_ptr_str);
+        let traverse_ptr: &*mut TraversePtrs = self.output_traverse_ptrs.get(&name).unwrap();
         copy_cuda_to_cuda(
-            unsafe { (*traverse_struct).grad_ptr }, 
-            string_to_ptr(&grad_ptrs.1), 
+            unsafe { (**traverse_ptr).grad_ptr }, 
+            grad_ptrs.1, 
             &[array_len]
         );
         //unsafe {
