@@ -136,8 +136,8 @@ impl LayerCuda for DropoutCuda
         // calculate bias gradients
     }
 
-    pub fn update_params(&mut self)
-    {   
+    fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
+    {    
         self.batch_size = 0.0;
 
         //println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]))
@@ -145,7 +145,7 @@ impl LayerCuda for DropoutCuda
         //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
-    pub fn details(&self)
+    fn details(&self)
     {
         println!("Layer type: DROPOUT | Layer name: {:?}", self.name);
         println!("Shape: {:?}", self.shape);
@@ -154,12 +154,12 @@ impl LayerCuda for DropoutCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.output_ptr, self.output_grad_ptr);
     }
 
-    pub fn get_param_count(&self) -> usize
+    fn get_param_count(&self) -> usize
     {
         return 0_usize
     }
 
-    pub fn move_ptrs_to_arrays(&mut self)
+    fn move_ptrs_to_arrays(&mut self)
     {
         self.mask_ptr_allocated = false;
     }
