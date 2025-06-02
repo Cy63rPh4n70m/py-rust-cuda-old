@@ -126,6 +126,6 @@ impl LayerCuda for L2NormCuda
 
     fn move_ptrs_to_arrays(&mut self)
     {
-        self.ptrs_allocated = false;
+
     }
 }
