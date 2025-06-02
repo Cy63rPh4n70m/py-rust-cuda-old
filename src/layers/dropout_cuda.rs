@@ -36,8 +36,11 @@ impl DropoutCuda
             count: 0,
         }
     }
-    // supports batch matrix multiplication unlike cpu
-    pub fn forward(&mut self, str_ptr_in: String, use_dropout: bool) -> String
+}
+
+impl LayerCuda for DropoutCuda
+{
+    fn forward(&mut self, str_ptr_in: String, use_dropout: bool) -> String
     {
         //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
         let batch: usize = self.shape.0;
