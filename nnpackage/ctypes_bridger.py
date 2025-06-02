@@ -204,8 +204,8 @@ def load_lib(path) -> dict:
     '''
 
     func_forward = lib.forward
-    func_forward.argtypes = [C.c_void_p, C.POINTER(C.c_char), C.POINTER(C.c_char), C.POINTER(C.c_char)]
-    func_forward.restype = C.POINTER(C.c_char)
+    func_forward.argtypes = [C.c_void_p, C.c_char_p, C.c_void_p, C.c_void_p]
+    func_forward.restype = C.c_void_p
     func_dict.update({"forward": func_forward})
 
     '''

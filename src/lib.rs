@@ -254,25 +254,19 @@ pub unsafe extern "C" fn pass_to_output_grad(
 
 #[no_mangle]
 pub unsafe extern "C" fn forward(
-    vp: *mut c_void, layer_id: *mut c_char, str_ptr_in: *mut c_char, str_ptr_weight_p: *mut c_char
-) -> *mut c_char
+    vp: *mut c_void, layer_id: *mut c_char, trav_in_v_ptr: *mut c_void, trav_weight_v_ptr: *mut c_void
+) -> *mut c_void
 {   
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    
+    let trav_in_ptr: *mut TraversePtrs = trav_in_v_ptr as *mut TraversePtrs;
+    let trav_weight_ptr: *mut TraversePtrs = trav_weight_v_ptr as *mut TraversePtrs;
+    
     let layer_id: String = CStr::from_ptr(layer_id).to_str().unwrap().to_string();
-    let str_ptr_in: String = char_ptr_to_string(str_ptr_in);
-    let str_ptr_weight_temp: String = CStr::from_ptr(str_ptr_weight_p).to_str().unwrap().to_string();
-    let str_ptr_weight: String;
-    if str_ptr_weight_temp != "none"
-    {
-        str_ptr_weight = char_ptr_to_string(str_ptr_weight_p);
-    }
-    else
-    {
-        str_ptr_weight = str_ptr_weight_temp;
-    }
-
-    let traverse_ptr: String = (*nn).forward(layer_id, str_ptr_in, str_ptr_weight);
-    return string_to_char_ptr(&traverse_ptr);
+    let traverse_ptr: *mut TraversePtrs = (*nn).forward(
+        layer_id, trav_in_ptr, trav_weight_ptr
+    );
+    return traverse_ptr as *mut c_void;
 }
 
 // assuming output is always 1 dimensional
