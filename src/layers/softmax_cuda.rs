@@ -139,8 +139,8 @@ impl LayerCuda for SoftmaxCuda
         //exit(1);      
     }
 
-    fn update_params(&mut self)
-    {
+    fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
+    {    
         self.batch_size = 0.0;
     }
 
