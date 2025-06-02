@@ -3,7 +3,6 @@ use std::process::exit;
 use std::collections::HashMap;
 use std::os::raw::c_char;
 
-use serde::{Deserialize, Serialize};
 use crate::cuda_bridge::{copy_host_to_cuda, softmax_ce_loss};
 use crate::pointer_ops::{char_ptr_to_string, new_cuda_ptr_str};
 use crate::{cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host}, 
@@ -19,7 +18,6 @@ pub struct TraversePtrs
     pub backward_pass_count: *mut usize // a pointer to the previous layer's counter
 }
 
-#[derive(Serialize, Deserialize)]
 pub struct NeuralNet
 {
     pub all_cuda_layers: HashMap<String, CudaLayer>, // name -> layer
