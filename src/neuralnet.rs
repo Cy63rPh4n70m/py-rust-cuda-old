@@ -261,24 +261,6 @@ impl NeuralNet
         // zero the main backward pass count, 
         set_zero_counter(self.backward_pass_count);
     }
-    
-    pub fn update_loss_queue(&mut self, loss: f32, _maxlen: usize)
-    {
-        if self.prev_loss > 0.0
-        {
-            if loss > self.prev_loss
-            {
-                self.global_lr *= 0.25;
-                println!("--- Reduced global loss to {:?} ---", self.global_lr);
-                for (_, layer) in &mut self.all_cuda_layers
-                {
-                    //layer.set_lr(self.global_lr);
-                }
-            }
-        }
-
-        self.prev_loss = loss;
-    }
 
     pub fn details(&self)
     {
