@@ -7,7 +7,7 @@ pub struct SoftmaxCuda
 {
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
-    
+
     pub input_exp_ptr: *mut f32,
     pub exp_sum_ptr: *mut f32,
     pub broadcast_temp_ptr: *mut f32,
@@ -25,36 +25,18 @@ impl SoftmaxCuda
     pub fn new(batch: usize, rows: usize, cols: usize, temperature: f32) -> Self
     {
         return Self
-        {
-            //io_ptrs,
-            //input_ptr: "".to_string(),
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
+        {   
+            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
+            allocation_status: AllocationStatus::new(),
             
-            input_exp_ptr: "".to_string(),
-            exp_sum_ptr: "".to_string(),
-            input_grad_temp: "none".to_string(),
-            broadcast_temp_ptr: "".to_string(),
-            //input_grads_ptr: String::from("NONE"),
-            //output_grads_ptr: String::from("NONE"),
-            //result_ptr: "".to_string(),
-            //result_ptr_t: "".to_string(),
+            input_exp_ptr: std::ptr::null_mut(),
+            exp_sum_ptr: std::ptr::null_mut(),
+            input_grad_temp: std::ptr::null_mut(),
+            broadcast_temp_ptr: std::ptr::null_mut(),
 
-            scale_array: ArrayD::zeros(IxDyn(&[0])),
-            shape: (batch, rows, cols),
-            zero_output: true,
-            zero_input_grad: false,
             temperature,
             backward_passes_count: 0,
             count: 0,
-            ptrs_allocated: false, 
             batch_size: 0.0
         }
     }
