@@ -52,40 +52,26 @@ impl LayerCuda for SoftmaxCuda
         let cols: usize = self.io_ptrs.in_shape.2;
 
         let flattened_shape: u32 = (batch * rows * cols) as u32;
-        
+
         if !self.allocation_status.ptrs_allocated
         {   
-            // initialise input pointer, set the input as the result pointer from previous layer
-            // tensor struct at this stage will contain the result ptr of the previous layer
-            ////////////////////////////////////////////////////////////////
-            //self.input_ptr = input.get_ptr_as_str();
-            self.input_exp_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            //self.input_t_ptr = new_cuda_ptr_str(&[batch, cols, rows]);
-            //////////////////////////////////////////////////////////////////
+            self.input_exp_ptr = new_cuda_array(flattened_shape);
 
-            // initialise the result tensor/pointer
-            //self.result_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            self.exp_sum_ptr = new_cuda_ptr_str(&[batch, rows, 1]);
-            self.broadcast_temp_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            self.input_grad_temp = new_cuda_ptr_str(&[self.shape.0, self.shape.1, self.shape.2]);
+            self.exp_sum_ptr = new_cuda_array((batch * rows * 1) as u32);
+            self.broadcast_temp_ptr = new_cuda_array(flattened_shape);
+            self.input_grad_temp = new_cuda_array(flattened_shape);
 
-            //self.result_ptr_t = new_cuda_ptr_str(&[batch, self.n_out, rows]);
-            
-            //self.input_grads_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-            //self.output_grads_ptr = new_cuda_ptr_str(&[batch, rows, cols]);
-
-            //self.shape = (batch, rows, cols);
-            //self.out_shape = (batch, rows, cols);
-
-            init_layer_connections(
-                &mut self.backward_count, &str_ptr_in, 
-                &mut self.backward_count_prev, &mut self.input_ptr, 
-                &mut self.input_grad_ptr, &mut self.output_ptr, 
-                &mut self.output_grad_ptr, &mut self.output_traverse_ptr, 
-                &[self.shape.0, self.shape.1, self.shape.2]
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2) as usize
             );
 
-            self.ptrs_allocated = true;
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
         }
 
         //let broadcast_buf: String = new_cuda_ptr_str(batch * rows * cols * self.n_out);
