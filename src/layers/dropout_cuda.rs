@@ -8,27 +8,14 @@ use crate::{cuda_bridge::{copy_cuda_to_cuda, dropout_backward, dropout_forward, 
 pub struct DropoutCuda
 {
     pub name: String,
-    pub shape: (usize, usize, usize),
+    pub io_ptrs: IOPtrs,
+    pub allocation_status: AllocationStatus,
 
-    pub dropout_mask_ptr: String,
-    pub rand_state_v_ptr: String,
-
-    pub input_ptr: String,
-    pub input_grad_ptr: String,
-    pub output_ptr: String,
-    pub output_grad_ptr: String,
-
+    pub dropout_mask_ptr: *mut f32,
+    pub rand_state_v_ptr: *mut c_void,
     pub dropout_rate: f32,
-
-    pub output_traverse_ptr: String,
-    
-    pub backward_count: String,
-    pub backward_count_prev: String,
-
     pub batch_size: f32,
     pub count: u128,
-
-    pub mask_ptr_allocated: bool, 
 }
 impl DropoutCuda
 {
@@ -38,31 +25,15 @@ impl DropoutCuda
         return Self
         {
             name: name.to_string(),
-            //input_ptr: "".to_string(),
             dropout_rate,
+
+            io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
+            allocation_status: AllocationStatus::new(),
             
-            dropout_mask_ptr: "".to_string(),
-
-            //input_grads_ptr: String::from("NONE"),
-            //output_grads_ptr: String::from("NONE"),
-            rand_state_v_ptr: String::from("NONE"),
-
-            input_ptr: "".to_string(),
-            input_grad_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            output_grad_ptr: "".to_string(),
-
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
-
-            //broadcast_array: ArrayD::zeros(IxDyn(&[0])),
-            //broadcast_array_ptr: "".to_string(),
-            shape: (batch, rows, cols),
+            dropout_mask_ptr: std::ptr::null_mut(),
+            rand_state_v_ptr: std::ptr::null_mut(),
             batch_size: 0.0,
             count: 0,
-            mask_ptr_allocated: false,
         }
     }
     // supports batch matrix multiplication unlike cpu
