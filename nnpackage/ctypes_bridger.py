@@ -9,7 +9,6 @@ def load_lib(path) -> dict:
 
     lib = C.cdll.LoadLibrary(path)
     func_create_model = lib.create_model
-    func_create_model.argtypes = [C.c_bool]
     func_create_model.restype = C.c_void_p
     func_dict.update({"create_model": func_create_model})
 
@@ -153,12 +152,12 @@ def load_lib(path) -> dict:
     func_pass_to_input.argtypes = [
         C.c_void_p, C.c_char_p, np.ctypeslib.ndpointer(np.float32), C.c_uint32
     ]
-    func_pass_to_input.restype = C.POINTER(C.c_char)
+    func_pass_to_input.restype = C.c_void_p
     func_dict.update({"pass_to_input": func_pass_to_input})
 
     func_pass_to_output = lib.pass_to_output
     func_pass_to_output.argtypes = [
-        C.c_void_p, C.c_char_p, C.c_char_p, C.c_uint32
+        C.c_void_p, C.c_char_p, C.c_void_p, C.c_uint32
     ]
     func_pass_to_output.restype = C.POINTER(C.c_float)
     func_dict.update({"pass_to_output": func_pass_to_output})
@@ -205,8 +204,8 @@ def load_lib(path) -> dict:
     '''
 
     func_forward = lib.forward
-    func_forward.argtypes = [C.c_void_p, C.POINTER(C.c_char), C.POINTER(C.c_char), C.POINTER(C.c_char)]
-    func_forward.restype = C.POINTER(C.c_char)
+    func_forward.argtypes = [C.c_void_p, C.c_char_p, C.c_void_p, C.c_void_p]
+    func_forward.restype = C.c_void_p
     func_dict.update({"forward": func_forward})
 
     '''
@@ -225,10 +224,6 @@ def load_lib(path) -> dict:
         C.c_void_p, C.c_char_p, C.c_int, C.c_float, C.c_float, C.c_float, C.c_float
     ]
     func_dict.update({"update_params": func_update_params})
-
-    func_update_loss_queue = lib.update_loss_queue
-    func_update_loss_queue.argtypes = [C.c_void_p, C.c_float, C.c_uint64]
-    func_dict.update({"update_loss_queue": func_update_loss_queue})
     
     func_free_array = lib.free_array
     func_free_array.argtypes = [C.POINTER(C.c_float), C.c_uint64]
