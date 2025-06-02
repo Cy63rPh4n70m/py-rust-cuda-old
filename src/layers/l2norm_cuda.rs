@@ -1,6 +1,6 @@
 use crate::{cuda_bridge::{l2norm_backward, l2norm_forward}, pointer_ops::{counter_is_zero, increment_counter, init_layer_connections, new_cuda_ptr_str, set_zero_counter, string_to_ptr}};
 
-use super::layer_cuda::{AllocationStatus, IOPtrs};
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct L2NormCuda
 {
@@ -24,7 +24,10 @@ impl L2NormCuda
             batch_size: 0.0,
         }
     }
+}
 
+impl LayerCuda for L2NormCuda
+{
     // supports batch matrix multiplication unlike cpu
     pub fn forward(&mut self, str_ptr_in: String) -> String
     {
