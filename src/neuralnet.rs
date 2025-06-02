@@ -116,30 +116,30 @@ impl NeuralNet
         return traverse_ptr_str.clone();
     }
 
-    pub fn pass_to_output(&mut self, name: String, traverse_ptr: *mut c_char, array_len: usize) -> *mut f32
+    pub fn pass_to_output(&mut self, name: String, traverse_ptr: *mut TraversePtrs, array_len: usize) -> *mut f32
     {
 
         if !self.output_ptrs.contains_key(&name)
         {
             self.output_ptrs.insert(
                 name.clone(), 
-                (String::from("none"), String::from("none"), array_len as u32)
+                (std::ptr::null_mut(), std::ptr::null_mut(), array_len as u32)
             );
             self.output_grad_ptrs.insert(
                 name.clone(), 
-                (String::from("none"), String::from("none"), array_len as u32)
+                (std::ptr::null_mut(), std::ptr::null_mut(), array_len as u32)
             );
         }
 
         // host pointer is pinned, gpu pointer can access directly
-        let ptrs: &mut (String, String, u32) = self.output_ptrs.get_mut(&name).unwrap();
-        let grad_ptrs: &mut (String, String, u32) = self.output_grad_ptrs.get_mut(&name).unwrap();
+        let ptrs: &mut (*mut f32, *mut f32, u32) = self.output_ptrs.get_mut(&name).unwrap();
+        let grad_ptrs: &mut (*mut f32, *mut f32, u32) = self.output_grad_ptrs.get_mut(&name).unwrap();
 
-        let traverse_ptr_str: String = char_ptr_to_string(traverse_ptr);
-        let traverse_struct: *mut TraversePtrs = string_to_traverse_ptr(&traverse_ptr_str);
+        //let traverse_ptr_str: String = char_ptr_to_string(traverse_ptr);
+        //let traverse_struct: *mut TraversePtrs = string_to_traverse_ptr(&traverse_ptr_str);
 
         // set the output/output_grad pointers
-        if ptrs.0 == "none"
+        if ptrs.0.is_null()
         {
             let (host_ptr_str, cuda_ptr_str) = create_host_and_cuda_ptr(array_len);
             let (host_ptr_str_grad, cuda_ptr_str_grad) = create_host_and_cuda_ptr(array_len);
@@ -148,17 +148,17 @@ impl NeuralNet
             grad_ptrs.0 = host_ptr_str_grad;
             grad_ptrs.1 = cuda_ptr_str_grad;
 
-            self.output_traverse_ptrs.insert(name.clone(), traverse_ptr_str);
+            self.output_traverse_ptrs.insert(name.clone(), traverse_ptr);
         }
 
         // copy to the output pointer
         copy_cuda_to_cuda(
-            string_to_ptr(&ptrs.1), 
-            unsafe { (*traverse_struct).ptr }, 
+            ptrs.1, 
+            unsafe { (*traverse_ptr).ptr }, 
             &[array_len]
         );
         
-        return string_to_ptr(&ptrs.0);
+        return ptrs.0;
     }
 
     pub fn ce_loss_fn(&mut self, output_name: String, target_classes: *mut f32, batch: usize, rows: usize, cols: usize) -> *mut f32
