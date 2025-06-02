@@ -99,41 +99,30 @@ impl LayerCuda for DropoutCuda
 
     }
 
-    pub fn backward(&mut self, use_dropout: bool)
+    fn backward(&mut self, use_dropout: bool)
     {
-        //let input_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("input").unwrap());
-        //let input_t_ptr: *mut f32 = string_to_ptr(&self.input_t_ptr);
-        let dropout_mask_ptr: *mut f32 = string_to_ptr(&self.dropout_mask_ptr);
-        //let weight_t_ptr: *mut f32 = string_to_ptr(&self.weight_t_ptr);
-        let input_grad_ptr: *mut f32 = string_to_ptr(&self.input_grad_ptr);
-        //let result_ptr: *mut f32 = string_to_ptr(self.io_ptrs.get("output").unwrap());
-        let original_grads: *mut f32 = string_to_ptr(&self.output_grad_ptr);
-
-        //println!("=========================================================");
-        //println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        //println!("\nweights: {:?}", cuda_ptr_to_array(dropout_mask_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("\nmatmul result: {:?}", cuda_ptr_to_array(result_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-
-        //let start: Instant = Instant::now();
         if use_dropout
         {
             dropout_backward(
-                original_grads, dropout_mask_ptr, input_grad_ptr,
-                self.shape.0, self.shape.1, self.shape.2
+                self.io_ptrs.output_grad_ptr, self.dropout_mask_ptr, 
+                self.io_ptrs.input_grad_ptr,
+                self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, 
+                self.io_ptrs.in_shape.2
             );
 
             self.batch_size += 1.0;
-            //ptr.set_ptr(input_grad_ptr, vec![self.shape.0, self.shape.1, self.shape.2]);
         }
         else
         {
-            copy_cuda_to_cuda(input_grad_ptr, original_grads, &[self.shape.0, self.shape.1, self.shape.2]);
+            copy_cuda_to_cuda(
+                self.io_ptrs.input_grad_ptr, self.io_ptrs.output_grad_ptr, 
+                &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]);
         }
 
         //println!("backward {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //exit(1);
 
-        increment_counter(&self.backward_count);
+        increment_counter(self.io_ptrs.backward_count);
         //let end = start.elapsed();
         //println!("backward: {:.6}", end.as_secs_f64());
 
@@ -145,26 +134,6 @@ impl LayerCuda for DropoutCuda
         //exit(1);
         // calculate summed respect to bias
         // calculate bias gradients
-
-        /**/
-        // calculate summed respect to bias
-        // calculate bias gradients
-        //self.bias_gradients += &(1.0 * &loss_r_summed); // bias derivative is 1.0
-
-        /*
-        // reshape
-        let mut shape: Vec<usize> = loss_r_summed.shape().to_vec();
-        shape.insert(shape.len() - 1, self.in_shape.1);
-        let grads: ArrayViewD<f32> = loss_r_summed.broadcast(shape).unwrap();
-        
-        // calculate update gradients for weights (multiply with the reshaped inputs)
-
-        let weight_grads: ArrayD<f32> = (&grads * &self.input).sum_axis(Axis(0));
-        //self.weight_gradients += &weight_grads;
-
-        // calculate update gradients for input (multiply with weights)
-        let return_grads: ArrayD<f32> = (&grads * &self.weights).sum_axis(Axis(2));
-        */
     }
 
     pub fn update_params(&mut self)
