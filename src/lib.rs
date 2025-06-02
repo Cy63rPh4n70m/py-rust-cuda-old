@@ -299,15 +299,6 @@ pub unsafe extern "C" fn set_dropout(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn update_loss_queue(
-    vp: *mut c_void, loss: f32, maxlen: usize
-)
-{
-    let nn: *mut NeuralNet = vp as *mut NeuralNet;
-    (*nn).update_loss_queue(loss, maxlen);
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn free_array(array_ptr: *mut f32, len: usize)
 {
     let output_vec: Vec<f32> = Vec::from_raw_parts(array_ptr, len, len);

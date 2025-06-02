@@ -224,10 +224,6 @@ def load_lib(path) -> dict:
         C.c_void_p, C.c_char_p, C.c_int, C.c_float, C.c_float, C.c_float, C.c_float
     ]
     func_dict.update({"update_params": func_update_params})
-
-    func_update_loss_queue = lib.update_loss_queue
-    func_update_loss_queue.argtypes = [C.c_void_p, C.c_float, C.c_uint64]
-    func_dict.update({"update_loss_queue": func_update_loss_queue})
     
     func_free_array = lib.free_array
     func_free_array.argtypes = [C.POINTER(C.c_float), C.c_uint64]
