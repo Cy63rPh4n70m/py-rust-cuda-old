@@ -3,7 +3,7 @@
 
 use std::{ffi::{c_char, CStr}, os::raw::c_void, process::exit};
 
-use io_functions::{load_model, save_model};
+//use io_functions::{load_model, save_model};
 use layers::{
     activation_cuda::ActivationCuda, broadcast_cuda::BroadcastCuda, 
     cls_cuda::CLSCuda, conv2d_cuda::Conv2dCuda, dense_cuda::DenseCuda, 
@@ -22,7 +22,7 @@ mod math_functions;
 mod types;
 mod batch;
 mod shaping;
-mod io_functions;
+//mod io_functions;
 mod layers;
 mod storage;
 mod random_name_gen;
@@ -368,12 +368,13 @@ pub unsafe extern "C" fn details(ptr: *mut c_void)
     (*nn).details();
 }
 
+/*
 #[no_mangle]
-pub unsafe extern "C" fn save(ptr: *mut c_void, path: *mut c_char, checkpoint: bool)
+pub unsafe extern "C" fn save(ptr: *mut c_void, path: *mut c_char)
 {
     let nn: *mut NeuralNet = ptr as *mut NeuralNet;
     let path: &str = CStr::from_ptr(path).to_str().unwrap();
-    save_model(path, &mut *nn, checkpoint);
+    //save_model(path, &mut *nn, checkpoint);
 }
 
 #[no_mangle]
@@ -381,12 +382,13 @@ pub unsafe extern "C" fn load(path: *mut c_char) -> *mut c_void
 {
     std::env::set_var("RUST_BACKTRACE", "full");
     let path: &str = CStr::from_ptr(path).to_str().unwrap();
-    let nn_struct: NeuralNet = load_model(path);
+    //let nn_struct: NeuralNet = load_model(path);
 
     let nn: *mut NeuralNet = Box::into_raw(Box::new(nn_struct));
 
     return nn as *mut c_void
 }
+*/
 
 //////////////////////////////////////////////////////////////////
 // for storage buffer
