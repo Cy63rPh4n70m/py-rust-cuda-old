@@ -6,36 +6,22 @@ pub struct L2NormCuda
 {
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
-    
+
     pub input_pow2_ptr: *mut f32,
     pub power_sum: *mut f32,
     pub batch_size: f32,
 }
 impl L2NormCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(batch: usize, rows: usize, cols: usize) -> Self
     {
         return Self
         {
-            input_ptr: "".to_string(),
-            input_pow2_ptr: "".to_string(),
-            power_sum: "".to_string(),
-            input_grads_ptr: "".to_string(),
-            output_grads_ptr: "".to_string(),
-            output_ptr: "".to_string(),
-            shape: (batch, rows, cols),
-            output_traverse_ptr: "".to_string(),
-
-            backward_count: String::from("none"),
-            backward_count_prev: String::from("none"),
-
-            scale_ptr: "".to_string(),
-            scale_vec: Vec::new(),
-
+            input_pow2_ptr: std::ptr::null_mut(),
+            power_sum: std::ptr::null_mut(),
+            io_ptrs: IOPtrs::new((batch, rows, cols),(batch, rows, cols)),
+            allocation_status: AllocationStatus::new(),
             batch_size: 0.0,
-            zero_input_grad: false,
-            ptrs_allocated: false, 
         }
     }
 
