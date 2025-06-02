@@ -241,14 +241,6 @@ impl NeuralNet
         return new_traverse_ptr;
     }
 
-    //pub fn get_output(&mut self, output_name: &str) -> *mut f32
-    //{
-    //    // host pointer is pinned, gpu pointer can access directly
-    //    let ptrs: &(String, String, u32) = self.output_ptrs.get(output_name).unwrap();
-    //    //let output_as_array: ArrayD<f32> = array_from_pinned(string_to_ptr(&ptrs.0), ptrs.2 as usize);
-    //    return string_to_ptr(&ptrs.0);
-    //}
-
     pub fn backward(&mut self)
     {
         // backpropagate through layers, reverse of the layer path
@@ -261,11 +253,6 @@ impl NeuralNet
         }
             //increment_counter(&self.backward_pass_count);
     }
-
-    //pub fn obtain_flattened_output(&self) -> usize
-    //{
-    //    return self.last_conv_shape.0 * self.last_conv_shape.1 * self.last_conv_shape.2;
-    //}
 
     pub fn update_params(&mut self, layer_id: &str, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {
