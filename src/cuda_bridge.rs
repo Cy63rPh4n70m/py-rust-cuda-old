@@ -1,6 +1,6 @@
 // allow c functions that use CUDA kernels to be accessible to rust
 use std::{os::raw::c_void, process::exit};
-#[link(name="nnpackage/backend/cuda_backend", kind="dylib")]
+#[link(name="test/nnpackage/backend/cuda_backend", kind="dylib")]
 extern "C"
 {
     fn matmul_bias_ext(
