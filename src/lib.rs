@@ -46,7 +46,7 @@ pub unsafe extern "C" fn add_dense_cuda_layer(
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(Box::new(DenseCuda::new(
-        n_in, n_out, batch, rows, use_bias, &name_string
+        n_in, n_out, batch, rows, use_bias, name_string
     )));
 
     (*nn).n_layers += 1;
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn add_activation_cuda_layer(
     let activation_str: &str = CStr::from_ptr(activation).to_str().unwrap();
 
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(Box::new(ActivationCuda::new(
-        activation_str, batch, rows, cols, scale, &name_string
+        activation_str, batch, rows, cols, scale, name_string
     )));
 
     (*nn).n_layers += 1;
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn add_l2norm_cuda_layer(
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(
-        Box::new(L2NormCuda::new(batch, rows, cols, &name_string))
+        Box::new(L2NormCuda::new(batch, rows, cols, name_string))
     );
 
     (*nn).n_layers += 1;
@@ -100,7 +100,7 @@ pub unsafe extern "C" fn add_embedding_2d_cuda_layer(
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(Box::new(
         Embedding2DCuda::new(
-            vocab_size, embedding_len, seq_len, &name_string
+            vocab_size, embedding_len, seq_len, name_string
         )
     ));
 
@@ -121,7 +121,7 @@ pub unsafe extern "C" fn add_conv2d_cuda_layer(
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(Box::new(
         Conv2dCuda::new(
             n_filters, filter_dim, strides, batch, rows, cols,
-            flatten, &name_string
+            flatten, name_string
         )
     ));
 
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn add_softmax_cuda_layer(
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(
-        Box::new(SoftmaxCuda::new(batch, rows, cols, temperature, &name_string))
+        Box::new(SoftmaxCuda::new(batch, rows, cols, temperature, name_string))
     );
 
     (*nn).n_layers += 1;
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn add_dropout_cuda_layer(
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(
-        Box::new(DropoutCuda::new(batch, rows, cols, dropout_rate, &name_string))
+        Box::new(DropoutCuda::new(batch, rows, cols, dropout_rate, name_string))
     );
 
     (*nn).n_layers += 1;
@@ -211,7 +211,7 @@ pub unsafe extern "C" fn add_broadcast_cuda_layer(
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(
-        Box::new(BroadcastCuda::new(out_batch, out_rows, out_cols, axis, &name_string))
+        Box::new(BroadcastCuda::new(out_batch, out_rows, out_cols, axis, name_string))
     );
 
     (*nn).n_layers += 1;
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn add_sum_cuda_layer(
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(
-        Box::new(SumCuda::new(in_batch, in_rows, in_cols, axis, &name_string))
+        Box::new(SumCuda::new(in_batch, in_rows, in_cols, axis, name_string))
     );
 
     (*nn).n_layers += 1;
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn add_transpose_cuda_layer(
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(
-        Box::new(BatchTransposeCuda::new(batch, rows, cols, &name_string))
+        Box::new(BatchTransposeCuda::new(batch, rows, cols, name_string))
     );
 
     (*nn).n_layers += 1;
@@ -263,7 +263,7 @@ pub unsafe extern "C" fn add_cls_cuda_layer(
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let name_string: String = name.to_string() + "_" + &(*nn).n_layers.to_string();
     let layer_ptr: *mut dyn LayerCuda = Box::into_raw(
-        Box::new(CLSCuda::new(batch, rows, cols, token_idx, &name_string))
+        Box::new(CLSCuda::new(batch, rows, cols, token_idx, name_string))
     );
 
     (*nn).n_layers += 1;
