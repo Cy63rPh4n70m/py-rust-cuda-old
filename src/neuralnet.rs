@@ -17,6 +17,7 @@ pub struct TraversePtrs
 pub struct NeuralNet
 {
     pub apply_dropout: bool,
+    pub n_layers: usize,
 
     pub input_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub output_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
@@ -42,7 +43,7 @@ impl NeuralNet
         return Self
         {
             apply_dropout: true,
-
+            n_layers: 0,
             input_ptrs: HashMap::new(),
             input_grad_ptrs: HashMap::new(),
             output_ptrs: HashMap::new(),
