@@ -203,7 +203,7 @@ impl LayerCuda for ElementwiseCuda
             self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2,
 
-            true, true, self.batch_size, optimizer_type, alpha, beta
+            false, true, self.batch_size, optimizer_type, alpha, beta
         );
         
         self.batch_size = 0.0;
