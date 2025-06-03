@@ -16,7 +16,6 @@ pub struct TraversePtrs
 
 pub struct NeuralNet
 {
-    pub all_cuda_layers: HashMap<String, Box<dyn LayerCuda>>, // name -> layer
     pub apply_dropout: bool,
 
     pub input_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
@@ -42,7 +41,6 @@ impl NeuralNet
         
         return Self
         {
-            all_cuda_layers: HashMap::new(),
             apply_dropout: true,
 
             input_ptrs: HashMap::new(),
@@ -58,11 +56,6 @@ impl NeuralNet
             
             backward_pass_count: Box::into_raw(Box::new(0_usize)),
         };
-    }
-
-    pub fn add_cuda_layer(&mut self, name: String, layer: Box<dyn LayerCuda>)
-    {
-        self.all_cuda_layers.insert(name, layer);
     }
 
     pub fn pass_to_input(&mut self, name: String, array_ptr: *mut f32, array_len: usize) -> *mut TraversePtrs
@@ -220,12 +213,6 @@ impl NeuralNet
 
     pub fn forward(&mut self, layer_id: String, trav_in_ptr: *mut TraversePtrs, trav_weight_ptr: *mut TraversePtrs) -> *mut TraversePtrs
     {
-        if !self.all_cuda_layers.contains_key(&layer_id)
-        {
-            println!("Error: Layer {:?} doesn't exist.", layer_id);
-            exit(1);
-        }
-        let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(&layer_id).unwrap();
         let new_traverse_ptr: *mut TraversePtrs = layer.forward(trav_in_ptr, trav_weight_ptr, self.apply_dropout);
 
         if !self.backward_path_container.contains_key(&layer_id)
@@ -242,7 +229,6 @@ impl NeuralNet
         // backpropagate through layers, reverse of the layer path
         for layer_name in self.backward_path.iter().rev()
         {
-            let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(layer_name).unwrap();
             //println!("started {:?}", layer_name);
             layer.backward(self.apply_dropout);
             //println!("completed {:?}", layer_name);
@@ -251,7 +237,6 @@ impl NeuralNet
 
     pub fn update_params(&mut self, layer_id: &str, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {
-        let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(layer_id).unwrap();
         layer.update_params(optimizer_type, lr, l2, alpha, beta);
 
         // zero the main backward pass count, 
@@ -263,7 +248,6 @@ impl NeuralNet
         let mut count: usize = 0;
         for (i, layer_name) in self.backward_path.iter().enumerate()
         {
-            let layer: &Box<dyn LayerCuda> = self.all_cuda_layers.get(layer_name).unwrap();
             println!("LAYER_ID: {:?} | LAYER_N: {}", layer_name, i);
             layer.details();
             println!("TOTAL_LAYER_PARAM_COUNT: {:?}", layer.get_param_count());
@@ -287,7 +271,6 @@ impl NeuralNet
     {
         for (cuda_layer_name, _) in &mut self.backward_path_container
         {
-            let cuda_layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(cuda_layer_name).unwrap();
             cuda_layer.move_ptrs_to_arrays();
         }
     }
