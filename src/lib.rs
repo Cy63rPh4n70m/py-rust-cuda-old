@@ -321,7 +321,7 @@ pub unsafe extern "C" fn pass_to_output_grad(
 
 #[no_mangle]
 pub unsafe extern "C" fn forward(
-    vp: *mut c_void, layer_id: *mut c_char, trav_in_v_ptr: *mut c_void, trav_weight_v_ptr: *mut c_void
+    vp: *mut c_void, layer_ptr: *mut dyn LayerCuda, trav_in_v_ptr: *mut c_void, trav_weight_v_ptr: *mut c_void
 ) -> *mut c_void
 {   
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
@@ -329,9 +329,8 @@ pub unsafe extern "C" fn forward(
     let trav_in_ptr: *mut TraversePtrs = trav_in_v_ptr as *mut TraversePtrs;
     let trav_weight_ptr: *mut TraversePtrs = trav_weight_v_ptr as *mut TraversePtrs;
     
-    let layer_id: String = CStr::from_ptr(layer_id).to_str().unwrap().to_string();
     let traverse_ptr: *mut TraversePtrs = (*nn).forward(
-        layer_id, trav_in_ptr, trav_weight_ptr
+        layer_ptr, trav_in_ptr, trav_weight_ptr
     );
     return traverse_ptr as *mut c_void;
 }
@@ -348,12 +347,11 @@ pub unsafe extern "C" fn backward(
 
 #[no_mangle]
 pub unsafe extern "C" fn update_params(
-    vp: *mut c_void, layer_id: *mut c_char, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32
+    vp: *mut c_void, layer_ptr: *mut dyn LayerCuda, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32
 )
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
-    let name: &str = CStr::from_ptr(layer_id).to_str().unwrap();
-    (*nn).update_params(name, optimizer_type, lr, l2, alpha, beta);
+    (*nn).update_params(layer_ptr, optimizer_type, lr, l2, alpha, beta);
 }
 
 #[no_mangle]
