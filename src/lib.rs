@@ -39,7 +39,7 @@ pub unsafe extern "C" fn create_model() -> *mut c_void
 #[no_mangle]
 pub unsafe extern "C" fn add_dense_cuda_layer(
     vp: *mut c_void, n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, id: *mut c_char
-)
+) -> *mut c_void
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: &str = CStr::from_ptr(id).to_str().unwrap();
