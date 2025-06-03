@@ -214,16 +214,20 @@ impl NeuralNet
 
     pub fn forward(&mut self, layer_ptr: *mut dyn LayerCuda, trav_in_ptr: *mut TraversePtrs, trav_weight_ptr: *mut TraversePtrs) -> *mut TraversePtrs
     {
+        let new_traverse_ptr: *mut TraversePtrs;
+        let layer_id: String;
         unsafe {
-            let new_traverse_ptr: *mut TraversePtrs =
+            new_traverse_ptr =
                 (*layer_ptr).forward(
                     trav_in_ptr, trav_weight_ptr, self.apply_dropout
                 );
+            
+            layer_id = (*layer_ptr).get_layer_id();
         }
 
         if !self.backward_path_container.contains_key(&layer_id)
         {
-            self.backward_path.push(layer_id.clone());
+            self.backward_path.push((layer_id.clone(), layer_ptr));
             self.backward_path_container.insert(layer_id.clone(), true);
         }
 
