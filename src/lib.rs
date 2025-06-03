@@ -49,6 +49,7 @@ pub unsafe extern "C" fn add_dense_cuda_layer(
             n_in, n_out, batch, rows, use_bias, name
         )
     ));
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -63,6 +64,7 @@ pub unsafe extern "C" fn add_activation_cuda_layer(
         id.to_string(), 
         Box::new(ActivationCuda::new(activation_str, batch, rows, cols, scale))
     );
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -76,6 +78,8 @@ pub unsafe extern "C" fn add_l2norm_cuda_layer(
         name,
         Box::new(L2NormCuda::new(batch, rows, cols))
     );
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -90,6 +94,8 @@ pub unsafe extern "C" fn add_embedding_2d_cuda_layer(
             vocab_size, embedding_len, seq_len
         )
     ));
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -109,6 +115,8 @@ pub unsafe extern "C" fn add_conv2d_cuda_layer(
             )
         )
     );
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -119,6 +127,8 @@ pub unsafe extern "C" fn add_softmax_cuda_layer(
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     (*nn).add_cuda_layer(name, Box::new(SoftmaxCuda::new(batch, rows, cols, temperature)));
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -129,6 +139,8 @@ pub unsafe extern "C" fn add_dropout_cuda_layer(
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     (*nn).add_cuda_layer(name, Box::new(DropoutCuda::new(batch, rows, cols, dropout_rate, "dropout")));
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -160,6 +172,8 @@ pub unsafe extern "C" fn add_elementwise_cuda_layer(
             op, dropout_rate, func_id, act_scale
         )
     ));
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -171,6 +185,8 @@ pub unsafe extern "C" fn add_broadcast_cuda_layer(
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     (*nn).add_cuda_layer(name, Box::new(BroadcastCuda::new(out_batch, out_rows, out_cols, axis)));
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -182,6 +198,8 @@ pub unsafe extern "C" fn add_sum_cuda_layer(
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     (*nn).add_cuda_layer(name, Box::new(SumCuda::new(in_batch, in_rows, in_cols, axis)));
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -192,6 +210,8 @@ pub unsafe extern "C" fn add_transpose_cuda_layer(
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     (*nn).add_cuda_layer(name, Box::new(BatchTransposeCuda::new(batch, rows, cols)));
+
+    return layer_ptr as *mut c_void;
 }
 
 #[no_mangle]
@@ -202,6 +222,8 @@ pub unsafe extern "C" fn add_cls_cuda_layer(
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     (*nn).add_cuda_layer(name, Box::new(CLSCuda::new(batch, rows, cols, token_idx)));
+
+    return layer_ptr as *mut c_void;
 }
 
 /////////////////////////////////////////////////////////////////////
