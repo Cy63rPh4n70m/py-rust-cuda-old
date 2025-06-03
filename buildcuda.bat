@@ -13,8 +13,8 @@ nvcc -use_fast_math -Xptxas -O3 -dc -c l2norm.cu
 nvcc -use_fast_math -Xptxas -O3 -dc -c softmax.cu
 nvcc -use_fast_math -Xptxas -O3 -dc -c dropout.cu
 nvcc -use_fast_math -Xptxas -O3 -shared -lcublas -o cuda_backend.dll external.obj dense_funcs.obj array_ops.obj conv_funcs.obj activation.obj layer_norm_funcs.obj reduction_funcs.obj matmul_tiling.obj embedding_funcs.obj softmax.obj dropout.obj l2norm.obj
-move *.dll ../nnpackage/backend/
-move *.lib ../nnpackage/backend/
-move *.exp ../nnpackage/backend/
+move *.dll ../test/nnpackage/backend/
+move *.lib ../test/nnpackage/backend/
+move *.exp ../test/nnpackage/backend/
 del *.obj
 cd ..
