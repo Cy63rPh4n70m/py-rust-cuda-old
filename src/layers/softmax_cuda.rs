@@ -8,6 +8,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct SoftmaxCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
 
@@ -25,10 +26,11 @@ pub struct SoftmaxCuda
 impl SoftmaxCuda
 {
     // weight matrix initialize during first ever run
-    pub fn new(batch: usize, rows: usize, cols: usize, temperature: f32) -> Self
+    pub fn new(batch: usize, rows: usize, cols: usize, temperature: f32, name: String) -> Self
     {
         return Self
         {   
+            name,
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
             allocation_status: AllocationStatus::new(),
 
@@ -153,6 +155,10 @@ impl LayerCuda for SoftmaxCuda
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Shape: {:?}", self.io_ptrs.in_shape);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn move_ptrs_to_arrays(&mut self)

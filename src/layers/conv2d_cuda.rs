@@ -37,14 +37,14 @@ impl Conv2dCuda
     // weight matrix initialize during first ever run
     pub fn new(
         n_filters: usize, filter_dim: usize, strides: usize,
-        batch: usize, rows: usize, cols: usize, flatten: bool, name: &str
+        batch: usize, rows: usize, cols: usize, flatten: bool, name: String
     ) -> Self
     {
         let in_shape: (usize, usize, usize) = (batch, rows, cols);
         let out_shape: (usize, usize, usize) = (n_filters, ((rows - filter_dim) / strides) + 1, ((cols - filter_dim) / strides) + 1);
         return Self
         {
-            name: name.to_string(),
+            name,
 
             n_filters,
             filter_dim,
@@ -246,6 +246,10 @@ impl LayerCuda for Conv2dCuda
         println!("Output shape: {:?}", self.io_ptrs.out_shape);
         println!("Filters: \n{:?}", self.weight_tensors.weight);
         println!("Biases: \n{:?}", self.weight_tensors.biases);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

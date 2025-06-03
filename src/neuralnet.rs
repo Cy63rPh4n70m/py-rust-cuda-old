@@ -17,6 +17,7 @@ pub struct TraversePtrs
 pub struct NeuralNet
 {
     pub apply_dropout: bool,
+    pub n_layers: usize,
 
     pub input_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub output_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
@@ -29,7 +30,7 @@ pub struct NeuralNet
     // order of cuda layer names to call for forward or backward
     // booleans determine whether to initialize output/input grad to zero
     // required when inputs/gradients are accumulated due to architectural design
-    pub backward_path: Vec<String>,
+    pub backward_path: Vec<(String, *mut dyn LayerCuda)>,
     pub backward_path_container: HashMap<String, bool>,
 
     pub backward_pass_count: *mut usize,
@@ -42,7 +43,7 @@ impl NeuralNet
         return Self
         {
             apply_dropout: true,
-
+            n_layers: 0,
             input_ptrs: HashMap::new(),
             input_grad_ptrs: HashMap::new(),
             output_ptrs: HashMap::new(),
@@ -211,9 +212,14 @@ impl NeuralNet
         //}
     }
 
-    pub fn forward(&mut self, layer_id: String, trav_in_ptr: *mut TraversePtrs, trav_weight_ptr: *mut TraversePtrs) -> *mut TraversePtrs
+    pub fn forward(&mut self, layer_ptr: *mut dyn LayerCuda, trav_in_ptr: *mut TraversePtrs, trav_weight_ptr: *mut TraversePtrs) -> *mut TraversePtrs
     {
-        let new_traverse_ptr: *mut TraversePtrs = layer.forward(trav_in_ptr, trav_weight_ptr, self.apply_dropout);
+        unsafe {
+            let new_traverse_ptr: *mut TraversePtrs =
+                (*layer_ptr).forward(
+                    trav_in_ptr, trav_weight_ptr, self.apply_dropout
+                );
+        }
 
         if !self.backward_path_container.contains_key(&layer_id)
         {
@@ -227,17 +233,17 @@ impl NeuralNet
     pub fn backward(&mut self)
     {
         // backpropagate through layers, reverse of the layer path
-        for layer_name in self.backward_path.iter().rev()
+        for (_, layer_ptr) in self.backward_path.iter().rev()
         {
             //println!("started {:?}", layer_name);
-            layer.backward(self.apply_dropout);
+            unsafe {(**layer_ptr).backward(self.apply_dropout); }
             //println!("completed {:?}", layer_name);
         }
     }
 
-    pub fn update_params(&mut self, layer_id: &str, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
+    pub fn update_params(&mut self, layer_ptr: *mut dyn LayerCuda, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {
-        layer.update_params(optimizer_type, lr, l2, alpha, beta);
+        unsafe { (*layer_ptr).update_params(optimizer_type, lr, l2, alpha, beta); }
 
         // zero the main backward pass count, 
         set_zero_counter(self.backward_pass_count);
@@ -246,14 +252,17 @@ impl NeuralNet
     pub fn details(&self)
     {
         let mut count: usize = 0;
-        for (i, layer_name) in self.backward_path.iter().enumerate()
+        for (i, (layer_name, layer)) in self.backward_path.iter().enumerate()
         {
             println!("LAYER_ID: {:?} | LAYER_N: {}", layer_name, i);
-            layer.details();
-            println!("TOTAL_LAYER_PARAM_COUNT: {:?}", layer.get_param_count());
-            println!("\x1b[48;5;8m==================================\x1b[0m");
+            unsafe {
+                (**layer).details();
+                println!("TOTAL_LAYER_PARAM_COUNT: {:?}", (**layer).get_param_count());
 
-            count += layer.get_param_count();
+                println!("\x1b[48;5;8m==================================\x1b[0m");
+
+                count += (**layer).get_param_count();
+            }
         }
 
         println!("TOTAL_MODEL_PARAM_COUNT: {:?}", count);
@@ -269,9 +278,9 @@ impl NeuralNet
     // only works on the cuda arrays, which use pointers to store inputs/weights
     pub fn store_cuda_params(&mut self)
     {
-        for (cuda_layer_name, _) in &mut self.backward_path_container
+        for (_, layer_ptr) in &mut self.backward_path
         {
-            cuda_layer.move_ptrs_to_arrays();
+            unsafe { (**layer_ptr).move_ptrs_to_arrays(); }
         }
     }
 }

@@ -8,6 +8,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct ActivationCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
 
@@ -17,9 +18,10 @@ pub struct ActivationCuda
 }
 impl ActivationCuda
 {
-    pub fn new(activation_str: &str, batch: usize, rows: usize, cols: usize, scale: f32) -> Self
+    pub fn new(activation_str: &str, batch: usize, rows: usize, cols: usize, scale: f32, name: String) -> Self
     {
         return Self {
+            name: name,
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
             allocation_status: AllocationStatus::new(),
             activation_str: activation_str.to_string(),
@@ -105,6 +107,10 @@ impl LayerCuda for ActivationCuda
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Shape: {:?}", self.io_ptrs.in_shape);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize
