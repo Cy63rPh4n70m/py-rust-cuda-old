@@ -48,11 +48,8 @@ class Trainer:
 
         self.lib_funcs.get("pass_to_output_grad")(self.model, id.encode(), flattened_array, array_len)
 
-    def forward(self, layer_id: str, ptr0, ptr1=None):
-        if ptr1 == None:
-            ptr1 = "none".encode()
-
-        new_ptr = self.lib_funcs.get("forward")(self.model, layer_id.encode(), ptr0, ptr1)
+    def forward(self, layer_id: str, in_ptr, weight_ptr=None):
+        new_ptr = self.lib_funcs.get("forward")(self.model, layer_id.encode(), in_ptr, weight_ptr)
         return new_ptr
         
     def backward(self):
