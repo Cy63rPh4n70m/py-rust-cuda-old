@@ -321,10 +321,11 @@ pub unsafe extern "C" fn pass_to_output_grad(
 
 #[no_mangle]
 pub unsafe extern "C" fn forward(
-    vp: *mut c_void, layer_ptr: *mut dyn LayerCuda, trav_in_v_ptr: *mut c_void, trav_weight_v_ptr: *mut c_void
+    vp: *mut c_void, layer_v_ptr: *mut c_void, trav_in_v_ptr: *mut c_void, trav_weight_v_ptr: *mut c_void
 ) -> *mut c_void
 {   
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
+    let layer_ptr: *mut dyn LayerCuda = layer_v_ptr as *mut dyn LayerCuda;
     
     let trav_in_ptr: *mut TraversePtrs = trav_in_v_ptr as *mut TraversePtrs;
     let trav_weight_ptr: *mut TraversePtrs = trav_weight_v_ptr as *mut TraversePtrs;
