@@ -6,6 +6,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct BatchTransposeCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
 
@@ -16,11 +17,12 @@ impl BatchTransposeCuda
 {
     // weight matrix initialize during first ever run
     pub fn new(
-        batch: usize, rows: usize, cols: usize
+        batch: usize, rows: usize, cols: usize, name: String
     ) -> Self
     {
         return Self
         {
+            name,
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, cols, rows)),
             allocation_status: AllocationStatus::new(),
             batch_size: 0.0,
@@ -94,6 +96,10 @@ impl LayerCuda for BatchTransposeCuda
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Input shape: {:?}", self.io_ptrs.in_shape);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

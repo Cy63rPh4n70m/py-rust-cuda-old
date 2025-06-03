@@ -13,6 +13,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, Weig
 
 pub struct ElementwiseCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub parameter_ptrs: ParameterPtrs,
     pub allocation_status: AllocationStatus,
@@ -37,11 +38,12 @@ impl ElementwiseCuda
     pub fn new(
         batch: usize, rows: usize, cols: usize, 
         range: f32, op: u32, dropout_rate: f32, activation_fn_id: i32, 
-        activation_scale: f32
+        activation_scale: f32, name: String
     ) -> Self
     {
         return Self
         {
+            name,
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
             parameter_ptrs: ParameterPtrs::new(),
             allocation_status: AllocationStatus::new(),
@@ -244,6 +246,10 @@ impl LayerCuda for ElementwiseCuda
             println!("Type: mul");
         }
         println!("Weights: \n{:?}", self.weight_tensors.weight);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

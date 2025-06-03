@@ -7,6 +7,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct SumCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
 
@@ -19,7 +20,7 @@ impl SumCuda
     // weight matrix initialize during first ever run
     pub fn new(
         in_batch: usize, in_rows: usize, in_cols: usize, 
-        axis: i32
+        axis: i32, name: String,
     ) -> Self
     {
         let in_shape: (usize, usize, usize) = (in_batch, in_rows, in_cols);
@@ -34,6 +35,7 @@ impl SumCuda
 
         return Self
         {
+            name,
             io_ptrs: IOPtrs::new(in_shape, out_shape),
             allocation_status: AllocationStatus::new(),
             
@@ -119,6 +121,10 @@ impl LayerCuda for SumCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Input shape: {:?}", self.io_ptrs.in_shape);
         println!("Axis: {:?}", self.axis);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

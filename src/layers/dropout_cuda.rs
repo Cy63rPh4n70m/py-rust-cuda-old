@@ -22,11 +22,11 @@ pub struct DropoutCuda
 impl DropoutCuda
 {
     // weight matrix initialize during first ever run
-    pub fn new(batch: usize, rows: usize, cols: usize, dropout_rate: f32, name: &str) -> Self
+    pub fn new(batch: usize, rows: usize, cols: usize, dropout_rate: f32, name: String) -> Self
     {
         return Self
         {
-            name: name.to_string(),
+            name,
             dropout_rate,
 
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
@@ -150,6 +150,10 @@ impl LayerCuda for DropoutCuda
         println!("Dropout rate: {:?}", self.dropout_rate);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

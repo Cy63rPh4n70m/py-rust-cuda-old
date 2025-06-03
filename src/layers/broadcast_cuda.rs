@@ -8,6 +8,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct BroadcastCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
 
@@ -20,7 +21,7 @@ impl BroadcastCuda
     // weight matrix initialize during first ever run
     pub fn new(
         out_batch: usize, out_rows: usize, out_cols: usize, 
-        axis: i32
+        axis: i32, name: String
     ) -> Self
     {
         let out_shape: (usize, usize, usize) = (out_batch, out_rows, out_cols);
@@ -35,6 +36,7 @@ impl BroadcastCuda
 
         return Self
         {
+            name,
             io_ptrs: IOPtrs::new(in_shape, out_shape),
             allocation_status: AllocationStatus::new(),
             
@@ -132,6 +134,10 @@ impl LayerCuda for BroadcastCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Output shape: {:?}", self.io_ptrs.out_shape);
         println!("Axis: {}", self.axis);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

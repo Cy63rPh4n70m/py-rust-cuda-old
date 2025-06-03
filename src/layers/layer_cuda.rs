@@ -13,6 +13,7 @@ pub trait LayerCuda
     fn details(&self);
     fn get_param_count(&self) -> usize;
     fn move_ptrs_to_arrays(&mut self);
+    fn get_layer_id(&self) -> String;
 }
 
 // composition structs to reduce code repetition
