@@ -136,9 +136,9 @@ impl LayerCuda for DenseCuda
 
         set_zero_counter(self.io_ptrs.backward_count);
 
-        //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
-        //println!("weight: {:?}", cuda_ptr_to_array(weight_ptr, &[batch, cols, self.n_out]));
-        //println!("output: {:?}\n", cuda_ptr_to_array(output_ptr, &[batch, rows, self.n_out]));
+        //println!("input: {:?}", cuda_ptr_to_vec(self.io_ptrs.input_ptr, batch * rows * cols));
+        //println!("weight: {:?}", cuda_ptr_to_vec(self.parameter_ptrs.weight_ptr, batch * cols * self.io_ptrs.out_shape.2));
+        //println!("output: {:?}\n", cuda_ptr_to_vec(self.io_ptrs.output_ptr, batch * rows * self.io_ptrs.out_shape.2));
 
         return self.io_ptrs.output_traverse_ptr;
 
@@ -211,7 +211,7 @@ impl LayerCuda for DenseCuda
             self.parameter_ptrs.bias_vel_ptr, self.parameter_ptrs.bias_moment_ptr,
             self.io_ptrs.out_shape.0, self.io_ptrs.out_shape.1, self.io_ptrs.out_shape.2,
             
-            self.use_bias, false, self.batch_size, optimizer_type, alpha, beta
+            false, false, self.batch_size, optimizer_type, alpha, beta
         );
 
         self.batch_size = 0.0;
