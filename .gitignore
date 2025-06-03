@@ -20,4 +20,3 @@ Cargo.lock
 /nnpackage/backend
 /nnpackage/__pycache__
 /__pycache__
-cuda_src/dense_funcs.obj
