@@ -211,7 +211,7 @@ impl LayerCuda for DenseCuda
             self.parameter_ptrs.bias_vel_ptr, self.parameter_ptrs.bias_moment_ptr,
             self.io_ptrs.out_shape.0, self.io_ptrs.out_shape.1, self.io_ptrs.out_shape.2,
             
-            self.use_bias, false, self.batch_size, optimizer_type, alpha, beta
+            false, false, self.batch_size, optimizer_type, alpha, beta
         );
 
         self.batch_size = 0.0;
