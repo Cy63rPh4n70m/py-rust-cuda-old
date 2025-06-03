@@ -25,13 +25,13 @@ impl DenseCuda
 {
     // weight matrix initialize during first ever run
     pub fn new(
-        n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, name: &str
+        n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, name: String
     ) -> Self
     {        
         return Self
         {
             //io_ptrs,
-            name: name.to_string(),
+            name,
             use_bias,
             batch_size: 0.0,
             io_ptrs: IOPtrs::new((batch, rows, n_in), (batch, rows, n_out)),
@@ -230,6 +230,10 @@ impl LayerCuda for DenseCuda
         {
             println!("Biases: \n{:?}", self.weight_tensors.biases);
         }
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

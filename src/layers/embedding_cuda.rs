@@ -8,6 +8,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, Weig
 
 pub struct Embedding2DCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub parameter_ptrs: ParameterPtrs,
     pub allocation_status: AllocationStatus,
@@ -25,10 +26,11 @@ pub struct Embedding2DCuda
 impl Embedding2DCuda
 {
     // weight matrix initialize during first ever run
-    pub fn new(vocab_size: usize, embedding_len: usize, seq_len: usize) -> Self
+    pub fn new(vocab_size: usize, embedding_len: usize, seq_len: usize, name: String) -> Self
     {
         return Self
         {
+            name: name.to_string(),
             embedding_len,
             vocab_size,
             seq_len,
@@ -151,6 +153,10 @@ impl LayerCuda for Embedding2DCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Embedding matrix:");
         println!("{:?}", self.weight_tensors.weight);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

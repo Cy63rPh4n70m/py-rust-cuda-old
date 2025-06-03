@@ -6,6 +6,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct CLSCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
 
@@ -18,11 +19,12 @@ impl CLSCuda
     // weight matrix initialize during first ever run
     pub fn new(
         in_batch: usize, in_rows: usize, in_cols: usize, 
-        token_idx: usize
+        token_idx: usize, name: String
     ) -> Self
     {
         return Self
         {
+            name,
             io_ptrs: IOPtrs::new(
                 (in_batch, in_rows, in_cols), 
                 (in_batch, 1, in_cols)
@@ -101,6 +103,10 @@ impl LayerCuda for CLSCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Input shape: {:?}", self.io_ptrs.in_shape);
         println!("CLS token index: {:?}", self.token_idx);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize

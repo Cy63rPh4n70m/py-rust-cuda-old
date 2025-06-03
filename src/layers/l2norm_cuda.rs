@@ -7,6 +7,7 @@ use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
 pub struct L2NormCuda
 {
+    pub name: String,
     pub io_ptrs: IOPtrs,
     pub allocation_status: AllocationStatus,
 
@@ -16,10 +17,11 @@ pub struct L2NormCuda
 }
 impl L2NormCuda
 {
-    pub fn new(batch: usize, rows: usize, cols: usize) -> Self
+    pub fn new(batch: usize, rows: usize, cols: usize, name: String) -> Self
     {
         return Self
         {
+            name,
             input_pow2_ptr: std::ptr::null_mut(),
             power_sum: std::ptr::null_mut(),
             io_ptrs: IOPtrs::new((batch, rows, cols),(batch, rows, cols)),
@@ -120,6 +122,10 @@ impl LayerCuda for L2NormCuda
         println!("Input Shape: {:?}", self.io_ptrs.in_shape);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+    }
+
+    fn get_layer_id(&self) -> String {
+        return self.name.clone();
     }
 
     fn get_param_count(&self) -> usize
