@@ -1,6 +1,6 @@
-use ndarray::{Array1, ArrayD};
+use ndarray::ArrayD;
 
-use crate::{math_functions::{get_loss_deriv_from_str, get_loss_from_str}, neuralnet::NeuralNet, types::{LossFn, LossFnDeriv}};
+use crate::neuralnet::NeuralNet;
 
 pub struct AutoencoderBuf
 {
