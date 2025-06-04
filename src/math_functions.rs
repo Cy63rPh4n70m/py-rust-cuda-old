@@ -1,4 +1,3 @@
-use half::vec;
 use ndarray::ArrayD;
 use rand::Rng;
 

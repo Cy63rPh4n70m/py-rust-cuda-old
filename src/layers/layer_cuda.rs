@@ -1,5 +1,3 @@
-use std::{os::raw::c_void, process::Stdio};
-
 use crate::neuralnet::TraversePtrs;
 
 pub trait LayerCuda
