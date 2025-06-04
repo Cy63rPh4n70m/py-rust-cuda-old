@@ -62,65 +62,71 @@ pub unsafe extern "C" fn add_dense_cuda_layer(
 #[no_mangle]
 pub unsafe extern "C" fn add_activation_cuda_layer(
     vp: *mut c_void, batch: usize, rows: usize, cols: usize, activation: *mut c_char, scale: f32, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: &str = CStr::from_ptr(id).to_str().unwrap();
     let activation_str: &str = CStr::from_ptr(activation).to_str().unwrap();
 
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, 
+        new_name.clone(), 
         Box::new(ActivationCuda::new(activation_str, batch, rows, cols, scale))
     );
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_l2norm_cuda_layer(
     vp: *mut c_void, batch: usize, rows: usize, cols: usize, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, 
+        new_name.clone(),
         Box::new(L2NormCuda::new(batch, rows, cols))
     );
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_embedding_2d_cuda_layer(
     vp: *mut c_void, vocab_size: usize, embedding_len: usize, seq_len: usize, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name,
+        new_name.clone(),
         Box::new(
         Embedding2DCuda::new(
             vocab_size, embedding_len, seq_len
         )
     ));
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_conv2d_cuda_layer(
     vp: *mut c_void, n_filters: usize, filter_dim: usize, strides: usize, 
     batch: usize, rows: usize, cols: usize, flatten: bool, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, 
+        new_name.clone(),
         Box::new(
             Conv2dCuda::new(
                 n_filters, filter_dim, strides, batch, rows, cols,
@@ -128,43 +134,49 @@ pub unsafe extern "C" fn add_conv2d_cuda_layer(
             )
         )
     );
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_softmax_cuda_layer(
     vp: *mut c_void, batch: usize, rows: usize, cols: usize, temperature: f32, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, 
+        new_name.clone(),
         Box::new(SoftmaxCuda::new(batch, rows, cols, temperature)
     ));
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_dropout_cuda_layer(
     vp: *mut c_void, batch: usize, rows: usize, cols: usize, dropout_rate: f32, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name,
+        new_name.clone(),
         Box::new(DropoutCuda::new(batch, rows, cols, dropout_rate, "dropout"))
     );
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_elementwise_cuda_layer(
     vp: *mut c_void, batch: usize, rows: usize, cols: usize, scale_range: f32, 
     op: u32, dropout_rate: f32, id: *mut c_char, activation_str: *mut c_char, act_scale: f32
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
@@ -184,76 +196,86 @@ pub unsafe extern "C" fn add_elementwise_cuda_layer(
     };
 
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, Box::new(
+        new_name.clone(),Box::new(
         ElementwiseCuda::new(
             batch, rows, cols, scale_range,
             op, dropout_rate, func_id, act_scale
         )
     ));
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_broadcast_cuda_layer(
     vp: *mut c_void, out_batch: usize, out_rows: usize, out_cols: usize,
     axis: i32, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, 
+        new_name.clone(),
         Box::new(BroadcastCuda::new(out_batch, out_rows, out_cols, axis)
     ));
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_sum_cuda_layer(
     vp: *mut c_void, in_batch: usize, in_rows: usize, in_cols: usize,
     axis: i32, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name,
+        new_name.clone(),
         Box::new(SumCuda::new(in_batch, in_rows, in_cols, axis)
     ));
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_transpose_cuda_layer(
     vp: *mut c_void, batch: usize, rows: usize, cols: usize, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, 
+        new_name.clone(),
         Box::new(BatchTransposeCuda::new(batch, rows, cols)
     ));
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn add_cls_cuda_layer(
     vp: *mut c_void, batch: usize, rows: usize, cols: usize, token_idx: usize, id: *mut c_char
-)
+) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: String = CStr::from_ptr(id).to_str().unwrap().to_string();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
-        new_name, 
+        new_name.clone(),
         Box::new(CLSCuda::new(batch, rows, cols, token_idx)
     ));
+
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 /////////////////////////////////////////////////////////////////////
