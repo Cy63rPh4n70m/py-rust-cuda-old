@@ -1,5 +1,8 @@
 
 
+use core::hash;
+use std::{collections::HashMap, hash::Hash};
+
 use crate::{
     cuda_bridge::{gradient_desc_3d, matmul_add_bias_back, 
         matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, 
@@ -256,5 +259,31 @@ impl LayerCuda for DenseCuda
             self.parameter_ptrs.biases_ptr, 
             self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2
         );
+    }
+
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>
+    {
+        self.move_ptrs_to_arrays();
+        let mut hashmap: HashMap<&str, Vec<f32>> = HashMap::new();
+        hashmap.insert("weights", self.weight_tensors.weight.clone());
+
+        if self.use_bias
+        {
+            hashmap.insert("biases", self.weight_tensors.biases.clone());
+        }
+
+        return Some(hashmap);
+    }
+
+    fn load_weights_from_hashmap(
+        &mut self, json_hashmap: &HashMap<&str, Vec<f32>>
+    ) 
+    {
+        self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
+
+        if self.use_bias
+        {
+            self.weight_tensors.biases = json_hashmap.get("biases").unwrap().to_vec();
+        }
     }
 }
