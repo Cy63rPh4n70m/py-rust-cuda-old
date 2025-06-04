@@ -48,7 +48,7 @@ pub unsafe extern "C" fn add_dense_cuda_layer(
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
     let name: &str = CStr::from_ptr(id).to_str().unwrap();
     let n_layers: usize = (*nn).all_cuda_layers.len();
-    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string();
+    let mut new_name: String = name.to_string() + "_" + &n_layers.to_string() + "\0";
     (*nn).add_cuda_layer(
         new_name.clone(), 
         Box::new(DenseCuda::new(
@@ -56,7 +56,7 @@ pub unsafe extern "C" fn add_dense_cuda_layer(
         )
     ));
 
-    return new_name.as_mut_ptr() as *mut i8;
+    return new_name.as_mut_ptr() as *mut c_char;
 }
 
 #[no_mangle]
