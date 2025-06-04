@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::neuralnet::TraversePtrs;
 
 pub trait LayerCuda
@@ -11,6 +13,8 @@ pub trait LayerCuda
     fn details(&self);
     fn get_param_count(&self) -> usize;
     fn move_ptrs_to_arrays(&mut self);
+    fn add_weights_to_hashmap(&mut self, json_hashmap: &mut HashMap<String, HashMap<String, Vec<f32>>>);
+    fn load_weights_from_hashmap(&mut self, json_hashmap: &mut HashMap<String, HashMap<String, Vec<f32>>>);
 }
 
 // composition structs to reduce code repetition
