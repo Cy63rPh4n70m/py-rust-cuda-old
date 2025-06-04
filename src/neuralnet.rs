@@ -1,4 +1,6 @@
 use core::f32;
+use std::fs::File;
+use std::io::Write;
 use std::process::exit;
 use std::collections::HashMap;
 
@@ -290,5 +292,36 @@ impl NeuralNet
             let cuda_layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(cuda_layer_name).unwrap();
             cuda_layer.move_ptrs_to_arrays();
         }
+    }
+
+    pub fn save(&mut self, filepath: &str)
+    {
+        let mut json_hashmap: HashMap<&str, HashMap<&str, Vec<f32>>> = HashMap::new();
+        for (layer_id, layer) in &mut self.all_cuda_layers
+        {
+            let params: Option<HashMap<&str, Vec<f32>>> = layer.get_weights_hashmap();
+            if params.is_some()
+            {
+                json_hashmap.insert(layer_id, params.unwrap());
+            }
+        }
+
+        let json_string: String = serde_json::to_string(&json_hashmap).unwrap();
+
+        let file: Result<File, std::io::Error> = File::create(filepath);
+
+        if file.is_err()
+        {
+            println!("Error: {} ", file.unwrap_err());
+            exit(1);
+        }
+
+        let mut file: File = file.unwrap();
+        if let Err(e) = file.write_all(json_string.as_bytes())
+        {
+            print!("Error: {}", e);
+            exit(1);
+        }
+        
     }
 }
