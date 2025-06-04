@@ -343,8 +343,11 @@ impl NeuralNet
 
         for (layer_id, layer) in &mut self.all_cuda_layers
         {
-            let param_hashmap: &HashMap<&str, Vec<f32>> = json_hashmap.get(layer_id.as_str()).unwrap();
-            layer.load_weights_from_hashmap(param_hashmap);
+            let param_hashmap: Option<&HashMap<&str, Vec<f32>>> = json_hashmap.get(layer_id.as_str());
+            if param_hashmap.is_some()
+            {
+                layer.load_weights_from_hashmap(param_hashmap.unwrap());
+            }
         }
     }
 }
