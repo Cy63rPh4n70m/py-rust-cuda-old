@@ -13,8 +13,8 @@ pub trait LayerCuda
     fn details(&self);
     fn get_param_count(&self) -> usize;
     fn move_ptrs_to_arrays(&mut self);
-    fn get_weights_hashmap(&mut self) -> Option<HashMap<String, Vec<f32>>>;
-    fn load_weights_from_hashmap(&mut self, hashmap: &HashMap<String, Vec<f32>>);
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>;
+    fn load_weights_from_hashmap(&mut self, hashmap: &HashMap<&str, Vec<f32>>);
 }
 
 // composition structs to reduce code repetition
