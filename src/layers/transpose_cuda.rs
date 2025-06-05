@@ -95,26 +95,4 @@ impl LayerCuda for BatchTransposeCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Input shape: {:?}", self.io_ptrs.in_shape);
     }
-
-    fn get_param_count(&self) -> usize
-    {
-        return 0_usize;
-    }
-
-    fn move_ptrs_to_arrays(&mut self)
-    {
-        //self.weights = cuda_ptr_to_array(
-        //    string_to_ptr(self.io_ptrs.get("weight").unwrap()), 
-        //    &[self.shape.0, self.shape.1, self.shape.2]
-        //);
-        //self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
-        //free_cuda_array(string_to_ptr(&self.weight_ptr));
-        //free_cuda_array(string_to_ptr(&self.biases_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_ptr));
-        //free_cuda_array(string_to_ptr(&self.result_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
-        //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-    }
 }
