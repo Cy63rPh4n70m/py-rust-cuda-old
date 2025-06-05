@@ -31,6 +31,20 @@ impl DenseCuda
         n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, name: &str
     ) -> Self
     {        
+        let mut weight_tensors: WeightTensors = WeightTensors::new();
+
+        let range: f32 = (6.0 / (n_in + n_out) as f32).sqrt();
+
+        weight_tensors.weight = random_float_vec(
+            batch * n_in * n_out, 
+            -range, range
+        );
+
+        weight_tensors.biases = random_float_vec(
+            batch * rows * n_out, 
+            0.0, 0.0
+        );
+
         return Self
         {
             //io_ptrs,
@@ -40,7 +54,7 @@ impl DenseCuda
             io_ptrs: IOPtrs::new((batch, rows, n_in), (batch, rows, n_out)),
             parameter_ptrs: ParameterPtrs::new(),
             allocation_status: AllocationStatus::new(),
-            weight_tensors: WeightTensors::new()
+            weight_tensors
         }
     }
 }
@@ -54,20 +68,8 @@ impl LayerCuda for DenseCuda
         let rows: usize = self.io_ptrs.in_shape.1;
         let cols: usize = self.io_ptrs.in_shape.2;
 
-        let range: f32 = (6.0 / (cols + self.io_ptrs.in_shape.2) as f32).sqrt();
-
         if !self.allocation_status.ptrs_allocated
         {   
-            // initialise biases and pointers
-            if !self.allocation_status.arrays_allocated
-            {
-                // initialize bias arrays
-                self.weight_tensors.biases = random_float_vec(
-                    batch * rows * self.io_ptrs.out_shape.2, 
-                    -0.001, 0.001
-                );
-            }
-
             // initialize bias pointers
             self.parameter_ptrs.biases_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.biases);
             self.parameter_ptrs.bias_grad_ptr = new_cuda_array(
@@ -84,15 +86,6 @@ impl LayerCuda for DenseCuda
             // decide whether to create weight based on pointer availability
             if trav_ptr_weight.is_null()
             {
-                // create pointer and vector for weights
-                if !self.allocation_status.arrays_allocated
-                {
-                    self.weight_tensors.weight = random_float_vec(
-                        batch * cols * self.io_ptrs.out_shape.2, 
-                        -range, range
-                    );
-                }
-
                 // initialize weight ptrs
                 self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
                 self.parameter_ptrs.weight_grad_ptr = new_cuda_array(

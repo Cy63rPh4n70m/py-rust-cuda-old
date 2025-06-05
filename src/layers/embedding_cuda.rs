@@ -29,6 +29,13 @@ impl Embedding2DCuda
     // weight matrix initialize during first ever run
     pub fn new(vocab_size: usize, embedding_len: usize, seq_len: usize) -> Self
     {
+        let range: f32 = (6.0 / ((embedding_len + embedding_len) as f32)).sqrt();
+        let mut weight_tensors: WeightTensors = WeightTensors::new();
+        weight_tensors.weight = random_float_vec(
+            1 * vocab_size * embedding_len, 
+            -range, range
+        );
+
         return Self
         {
             embedding_len,
@@ -37,7 +44,7 @@ impl Embedding2DCuda
 
             io_ptrs: IOPtrs::new((1, 1, seq_len), (1, seq_len, embedding_len)),
             parameter_ptrs: ParameterPtrs::new(),
-            weight_tensors: WeightTensors::new(),
+            weight_tensors,
             allocation_status: AllocationStatus::new(),
             
             embedding_lookup_grad_count_ptr: std::ptr::null_mut(),
@@ -56,14 +63,6 @@ impl LayerCuda for Embedding2DCuda
         {   
 
             let embedding_lookup_len: u32 = (1 * self.vocab_size * self.embedding_len) as u32;
-            if !self.allocation_status.arrays_allocated
-            {   
-                let range: f32 = (6.0 / ((self.embedding_len + self.embedding_len) as f32)).sqrt();
-                self.weight_tensors.weight = random_float_vec(
-                    1 * self.vocab_size * self.embedding_len, 
-                    -range, range
-                );
-            }
 
             self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
             self.parameter_ptrs.weight_grad_ptr = new_cuda_array(embedding_lookup_len);

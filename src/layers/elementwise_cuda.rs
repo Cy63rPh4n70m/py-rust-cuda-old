@@ -40,12 +40,20 @@ impl ElementwiseCuda
         activation_scale: f32
     ) -> Self
     {
+        let shape_flat: usize = batch * rows * cols;
+        // initialise weights and weight pointer
+        let mut weight_tensors: WeightTensors = WeightTensors::new();
+        weight_tensors.weight = random_float_vec(
+            shape_flat, 
+            -range, range
+        );
+
         return Self
         {
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, rows, cols)),
             parameter_ptrs: ParameterPtrs::new(),
             allocation_status: AllocationStatus::new(),
-            weight_tensors: WeightTensors::new(),
+            weight_tensors,
 
             dropout_mask_ptr: std::ptr::null_mut(),
             rand_state_v_ptr: std::ptr::null_mut(),
@@ -82,15 +90,6 @@ impl LayerCuda for ElementwiseCuda
             
             if trav_ptr_weight.is_null()
             {
-                if !self.allocation_status.arrays_allocated
-                {
-                    // initialise weights and weight pointer
-                    self.weight_tensors.weight = random_float_vec(
-                        shape_flat as usize, 
-                        -self.range, self.range
-                    );
-
-                }
                 // initialize weight ptrs
                 self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
                 self.parameter_ptrs.weight_grad_ptr = new_cuda_array(
