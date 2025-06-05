@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     cuda_bridge::{embedding_backward, embedding_forward, gradient_desc_3d, new_cuda_array}, 
     math_functions::random_float_vec, neuralnet::TraversePtrs, 
@@ -166,5 +168,21 @@ impl LayerCuda for Embedding2DCuda
             self.parameter_ptrs.weight_ptr, 
             1 * self.vocab_size * self.embedding_len
         );
+    }
+
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>
+    {
+        self.move_ptrs_to_arrays();
+        let mut hashmap: HashMap<&str, Vec<f32>> = HashMap::new();
+        hashmap.insert("weights", self.weight_tensors.weight.clone());
+
+        return Some(hashmap);
+    }
+
+    fn load_weights_from_hashmap(
+        &mut self, json_hashmap: &HashMap<&str, Vec<f32>>
+    ) 
+    {
+        self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
     }
 }
