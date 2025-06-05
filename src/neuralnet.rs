@@ -263,10 +263,9 @@ impl NeuralNet
     pub fn details(&self)
     {
         let mut count: usize = 0;
-        for (i, layer_name) in self.backward_path.iter().enumerate()
+        for (i, (layer_id, layer)) in self.all_cuda_layers.iter().enumerate()
         {
-            let layer: &Box<dyn LayerCuda> = self.all_cuda_layers.get(layer_name).unwrap();
-            println!("LAYER_ID: {:?} | LAYER_N: {}", layer_name, i);
+            println!("LAYER_ID: {:?} | LAYER_N: {}", layer_id, i);
             layer.details();
             println!("TOTAL_LAYER_PARAM_COUNT: {:?}", layer.get_param_count());
             println!("\x1b[48;5;8m==================================\x1b[0m");
