@@ -40,8 +40,30 @@ impl Conv2dCuda
         batch: usize, rows: usize, cols: usize, flatten: bool, name: &str
     ) -> Self
     {
+        let stride_count_y: usize = ((rows - filter_dim) / strides) + 1;
+        let stride_count_x: usize = ((cols - filter_dim) / strides) + 1;
         let in_shape: (usize, usize, usize) = (batch, rows, cols);
-        let out_shape: (usize, usize, usize) = (n_filters, ((rows - filter_dim) / strides) + 1, ((cols - filter_dim) / strides) + 1);
+        let out_shape: (usize, usize, usize) = (n_filters, stride_count_y, stride_count_x);
+        
+        let mut weight_tensors: WeightTensors = WeightTensors::new();
+
+        let range: f32 = 
+            (6.0 / 
+                ((batch * filter_dim * filter_dim + 
+                 n_filters * filter_dim * filter_dim) as f32)).sqrt();
+        let weight_len: usize = n_filters * batch * filter_dim * filter_dim;
+        let output_len: usize = n_filters * stride_count_y * stride_count_x;
+
+        weight_tensors.weight = random_float_vec(
+            weight_len, 
+            -range, range
+        );
+
+        weight_tensors.biases = random_float_vec(
+            output_len,
+            0.0, 0.0
+        );
+        
         return Self
         {
             name: name.to_string(),
@@ -60,7 +82,7 @@ impl Conv2dCuda
             io_ptrs: IOPtrs::new(in_shape, out_shape),
             parameter_ptrs: ParameterPtrs::new(),
             allocation_status: AllocationStatus::new(),
-            weight_tensors: WeightTensors::new(),
+            weight_tensors,
             
             input_grads_count_ptr: std::ptr::null_mut(),
             filters_grad_count_ptr: std::ptr::null_mut(),
@@ -96,35 +118,12 @@ impl LayerCuda for Conv2dCuda
             let weight_len: u32 = (self.n_filters * self.in_channels * self.filter_dim * self.filter_dim) as u32;
             let output_len: u32 = (self.n_filters * self.stride_count_y * self.stride_count_x) as u32;
 
-            // initialise biases
-            if !self.allocation_status.arrays_allocated
-            {
-                self.weight_tensors.biases = random_float_vec(
-                    self.n_filters * self.stride_count_y * self.stride_count_x, 
-                    -0.001, 0.001
-                );
-            }
-
             self.parameter_ptrs.biases_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.biases);
             self.parameter_ptrs.bias_grad_ptr = new_cuda_array(output_len);
             self.parameter_ptrs.bias_vel_ptr = new_cuda_array(output_len);
             self.parameter_ptrs.bias_moment_ptr = new_cuda_array(output_len);
 
             self.input_grads_count_ptr = new_cuda_array((batch * rows * cols) as u32);
-
-            if !self.allocation_status.arrays_allocated
-            {
-                // initialise weights and weight pointer
-                let range: f32 = 
-                    (6.0 / 
-                        ((batch * self.filter_dim * self.filter_dim + 
-                         self.n_filters * self.filter_dim * self.filter_dim) as f32)).sqrt();
-
-                self.weight_tensors.weight = random_float_vec(
-                    weight_len as usize,
-                    -range, range
-                );
-            }
     
             self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
             self.parameter_ptrs.weight_grad_ptr = new_cuda_array(weight_len);
