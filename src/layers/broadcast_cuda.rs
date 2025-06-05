@@ -133,22 +133,4 @@ impl LayerCuda for BroadcastCuda
         println!("Output shape: {:?}", self.io_ptrs.out_shape);
         println!("Axis: {}", self.axis);
     }
-
-    fn get_param_count(&self) -> usize
-    {
-        return 0_usize;
-    }
-
-    fn move_ptrs_to_arrays(&mut self)
-    {
-        //self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
-        //free_cuda_array(string_to_ptr(&self.weight_ptr));
-        //free_cuda_array(string_to_ptr(&self.biases_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_ptr));
-        //free_cuda_array(string_to_ptr(&self.result_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
-        //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
-    }
 }
