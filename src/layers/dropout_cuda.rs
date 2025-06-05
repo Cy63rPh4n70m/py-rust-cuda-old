@@ -151,14 +151,4 @@ impl LayerCuda for DropoutCuda
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
     }
-
-    fn get_param_count(&self) -> usize
-    {
-        return 0_usize
-    }
-
-    fn move_ptrs_to_arrays(&mut self)
-    {
-
-    }
 }
