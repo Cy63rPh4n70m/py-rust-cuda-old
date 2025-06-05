@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{collections::HashMap, process::exit};
 
 use crate::{cuda_bridge::{conv2d_backward, 
     conv2d_forward, gradient_desc_3d, new_cuda_array,
@@ -274,5 +274,31 @@ impl LayerCuda for Conv2dCuda
         //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
         //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
         //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
+    }
+
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>
+    {
+        self.move_ptrs_to_arrays();
+        let mut hashmap: HashMap<&str, Vec<f32>> = HashMap::new();
+        hashmap.insert("weights", self.weight_tensors.weight.clone());
+
+        if self.use_bias
+        {
+            hashmap.insert("biases", self.weight_tensors.biases.clone());
+        }
+
+        return Some(hashmap);
+    }
+
+    fn load_weights_from_hashmap(
+        &mut self, json_hashmap: &HashMap<&str, Vec<f32>>
+    ) 
+    {
+        self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
+
+        if self.use_bias
+        {
+            self.weight_tensors.biases = json_hashmap.get("biases").unwrap().to_vec();
+        }
     }
 }
