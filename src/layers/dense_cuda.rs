@@ -285,5 +285,7 @@ impl LayerCuda for DenseCuda
         {
             self.weight_tensors.biases = json_hashmap.get("biases").unwrap().to_vec();
         }
+
+        self.allocation_status.arrays_allocated = true;
     }
 }
