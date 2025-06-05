@@ -263,10 +263,19 @@ impl NeuralNet
     pub fn details(&self)
     {
         let mut count: usize = 0;
-        for (i, layer_name) in self.backward_path.iter().enumerate()
+        let mut cuda_layer_vec: Vec<(usize, &String, &Box<dyn LayerCuda>)> = Vec::new();
+        for (layer_id, layer) in self.all_cuda_layers.iter()
         {
-            let layer: &Box<dyn LayerCuda> = self.all_cuda_layers.get(layer_name).unwrap();
-            println!("LAYER_ID: {:?} | LAYER_N: {}", layer_name, i);
+            let layer_id_splitted: Vec<&str> = layer_id.split("_").collect();
+            let id_int: usize = layer_id_splitted[0].parse::<usize>().unwrap();
+            cuda_layer_vec.push((id_int, layer_id, layer));
+        }
+
+        cuda_layer_vec.sort_by_key(|(id_int, _, _)| *id_int);
+        
+        for (i, (_, layer_id, layer)) in cuda_layer_vec.iter().enumerate()
+        {
+            println!("LAYER_ID: {:?} | LAYER_N: {}", layer_id, i);
             layer.details();
             println!("TOTAL_LAYER_PARAM_COUNT: {:?}", layer.get_param_count());
             println!("\x1b[48;5;8m==================================\x1b[0m");
