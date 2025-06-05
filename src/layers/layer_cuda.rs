@@ -11,6 +11,7 @@ pub trait LayerCuda
     fn backward(&mut self, use_dropout: bool);
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32);
     fn details(&self);
+    fn free_detached_ptrs(&self);
 
     fn get_param_count(&self) -> usize
     {
@@ -67,6 +68,8 @@ pub struct ParameterPtrs
     pub weight_vel_ptr: *mut f32,
     pub weight_moment_ptr: *mut f32,
 
+    pub weight_ptr_detached: bool,
+
     pub biases_ptr: *mut f32,
     pub bias_grad_ptr: *mut f32,
     pub bias_vel_ptr: *mut f32,
@@ -82,6 +85,8 @@ impl ParameterPtrs
             weight_grad_ptr: std::ptr::null_mut(),
             weight_vel_ptr: std::ptr::null_mut(),
             weight_moment_ptr: std::ptr::null_mut(),
+
+            weight_ptr_detached: true,
         
             biases_ptr: std::ptr::null_mut(),
             bias_grad_ptr: std::ptr::null_mut(),
