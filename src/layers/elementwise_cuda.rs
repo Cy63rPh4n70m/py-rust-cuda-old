@@ -282,5 +282,6 @@ impl LayerCuda for ElementwiseCuda
     ) 
     {
         self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
+        self.allocation_status.arrays_allocated = true;
     }
 }

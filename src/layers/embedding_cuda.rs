@@ -184,5 +184,6 @@ impl LayerCuda for Embedding2DCuda
     ) 
     {
         self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
+        self.allocation_status.arrays_allocated = true;
     }
 }
