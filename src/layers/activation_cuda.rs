@@ -106,14 +106,4 @@ impl LayerCuda for ActivationCuda
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Shape: {:?}", self.io_ptrs.in_shape);
     }
-
-    fn get_param_count(&self) -> usize
-    {
-        return 0_usize;
-    }
-
-    fn move_ptrs_to_arrays(&mut self)
-    {
-
-    }
 }
