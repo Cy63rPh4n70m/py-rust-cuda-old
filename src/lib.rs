@@ -450,27 +450,21 @@ pub unsafe extern "C" fn details(ptr: *mut c_void)
     (*nn).details();
 }
 
-/*
 #[no_mangle]
 pub unsafe extern "C" fn save(ptr: *mut c_void, path: *mut c_char)
 {
     let nn: *mut NeuralNet = ptr as *mut NeuralNet;
     let path: &str = CStr::from_ptr(path).to_str().unwrap();
-    //save_model(path, &mut *nn, checkpoint);
+    (*nn).save(path);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn load(path: *mut c_char) -> *mut c_void
+pub unsafe extern "C" fn load(ptr: *mut c_void, path: *mut c_char)
 {
-    std::env::set_var("RUST_BACKTRACE", "full");
     let path: &str = CStr::from_ptr(path).to_str().unwrap();
-    //let nn_struct: NeuralNet = load_model(path);
-
-    let nn: *mut NeuralNet = Box::into_raw(Box::new(nn_struct));
-
-    return nn as *mut c_void
+    let nn: *mut NeuralNet = ptr as *mut NeuralNet;
+    (*nn).load(path);
 }
-*/
 
 //////////////////////////////////////////////////////////////////
 // for storage buffer

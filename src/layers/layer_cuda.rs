@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::neuralnet::TraversePtrs;
 
 pub trait LayerCuda
@@ -9,8 +11,16 @@ pub trait LayerCuda
     fn backward(&mut self, use_dropout: bool);
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32);
     fn details(&self);
-    fn get_param_count(&self) -> usize;
-    fn move_ptrs_to_arrays(&mut self);
+
+    fn get_param_count(&self) -> usize
+    {
+        return 0_usize;
+    }
+    fn move_ptrs_to_arrays(&mut self) {}
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>> {
+        return None;
+    }
+    fn load_weights_from_hashmap(&mut self, _hashmap: &HashMap<&str, Vec<f32>>) {}
 }
 
 // composition structs to reduce code repetition

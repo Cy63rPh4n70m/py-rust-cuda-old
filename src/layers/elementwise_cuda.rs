@@ -1,4 +1,4 @@
-use std::{os::raw::c_void, process::exit};
+use std::{collections::HashMap, os::raw::c_void, process::exit};
 
 use crate::{
     cuda_bridge::{
@@ -266,5 +266,21 @@ impl LayerCuda for ElementwiseCuda
         //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
         //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
         //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
+    }
+
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>
+    {
+        self.move_ptrs_to_arrays();
+        let mut hashmap: HashMap<&str, Vec<f32>> = HashMap::new();
+        hashmap.insert("weights", self.weight_tensors.weight.clone());
+
+        return Some(hashmap);
+    }
+
+    fn load_weights_from_hashmap(
+        &mut self, json_hashmap: &HashMap<&str, Vec<f32>>
+    ) 
+    {
+        self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
     }
 }
