@@ -86,12 +86,7 @@ impl LayerCuda for SoftmaxCuda
         set_zero_counter(self.io_ptrs.backward_count);
         return self.io_ptrs.output_traverse_ptr;
     }
-
-    fn get_param_count(&self) -> usize
-    {
-        return 0_usize;
-    }
-
+    
     fn backward(&mut self, _use_dropout: bool)
     {
         copy_cuda_to_cuda(self.input_grad_temp, self.io_ptrs.output_grad_ptr, &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]);
@@ -153,9 +148,5 @@ impl LayerCuda for SoftmaxCuda
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Shape: {:?}", self.io_ptrs.in_shape);
-    }
-
-    fn move_ptrs_to_arrays(&mut self)
-    {
     }
 }
