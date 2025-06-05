@@ -34,6 +34,7 @@ pub struct NeuralNet
     // required when inputs/gradients are accumulated due to architectural design
     pub backward_path: Vec<String>,
     pub backward_path_container: HashMap<String, bool>,
+    pub io_ptrs_record: HashMap<String, *mut TraversePtrs>,
 
     pub backward_pass_count: *mut usize,
 }
@@ -57,6 +58,7 @@ impl NeuralNet
 
             backward_path: Vec::new(),
             backward_path_container: HashMap::new(),
+            io_ptrs_record: HashMap::new(),
             
             backward_pass_count: Box::into_raw(Box::new(0_usize)),
         };
@@ -230,6 +232,12 @@ impl NeuralNet
         let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(&layer_id).unwrap();
         let new_traverse_ptr: *mut TraversePtrs = layer.forward(trav_in_ptr, trav_weight_ptr, self.apply_dropout);
 
+        // store the output pointers
+        if !self.io_ptrs_record.contains_key(&layer_id)
+        {
+            self.io_ptrs_record.insert(layer_id.clone(), new_traverse_ptr);
+        }
+
         if !self.backward_path_container.contains_key(&layer_id)
         {
             self.backward_path.push(layer_id.clone());
@@ -358,5 +366,11 @@ impl NeuralNet
                 layer.load_weights_from_hashmap(param_hashmap.unwrap());
             }
         }
+    }
+
+    pub fn delete(&mut self)
+    {
+        // for each layer, free any pointers that aren't in the io_ptrs_record
+        
     }
 }
