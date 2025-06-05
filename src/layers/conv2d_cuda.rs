@@ -42,6 +42,13 @@ impl Conv2dCuda
     {
         let stride_count_y: usize = ((rows - filter_dim) / strides) + 1;
         let stride_count_x: usize = ((cols - filter_dim) / strides) + 1;
+
+        if stride_count_y == 0 || stride_count_x == 0
+        {
+            println!("Error: Convolutional output is zero");
+            exit(1);
+        }
+
         let in_shape: (usize, usize, usize) = (batch, rows, cols);
         let out_shape: (usize, usize, usize) = (n_filters, stride_count_y, stride_count_x);
         
@@ -106,12 +113,6 @@ impl LayerCuda for Conv2dCuda
         {   
             self.stride_count_y = ((rows - self.filter_dim) / self.strides) + 1;
             self.stride_count_x = ((cols - self.filter_dim) / self.strides) + 1;
-
-            if self.stride_count_y == 0 || self.stride_count_x == 0
-            {
-                println!("Error: Convolutional output is zero");
-                exit(1);
-            }
 
             self.in_channels = batch;
 
