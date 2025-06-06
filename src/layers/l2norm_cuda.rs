@@ -1,5 +1,7 @@
+use std::ffi::c_void;
+
 use crate::{
-    cuda_bridge::{l2norm_backward, l2norm_forward, new_cuda_array}, 
+    cuda_bridge::{free_cuda_array, l2norm_backward, l2norm_forward, new_cuda_array}, 
     neuralnet::TraversePtrs, 
     pointer_ops::{counter_is_zero, increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
@@ -120,5 +122,11 @@ impl LayerCuda for L2NormCuda
         println!("Input Shape: {:?}", self.io_ptrs.in_shape);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        free_cuda_array(self.input_pow2_ptr as *mut c_void);
+        free_cuda_array(self.power_sum as *mut c_void);
     }
 }
