@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    cuda_bridge::{embedding_backward, embedding_forward, gradient_desc_3d, new_cuda_array}, 
+    cuda_bridge::{embedding_backward, embedding_forward, free_cuda_array, gradient_desc_3d, new_cuda_array}, 
     math_functions::random_float_vec, neuralnet::TraversePtrs, 
     pointer_ops::{cuda_ptr_to_vec, init_trav_in_ptrs, set_zero_counter, vec_to_cuda_ptr}
 };
@@ -184,5 +184,16 @@ impl LayerCuda for Embedding2DCuda
     {
         self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
         self.allocation_status.arrays_allocated = true;
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        free_cuda_array(self.parameter_ptrs.weight_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_grad_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_vel_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_moment_ptr);
+
+        free_cuda_array(self.embedding_lookup_grad_count_ptr);
+        free_cuda_array(self.embedding_lookup_grad_temp_ptr);
     }
 }
