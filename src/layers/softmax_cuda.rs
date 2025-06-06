@@ -21,7 +21,6 @@ pub struct SoftmaxCuda
     pub input_grad_temp: *mut f32,
 
     pub backward_passes_count: u128,
-    pub count: u128,
     pub batch_size: f32,
 }
 impl SoftmaxCuda
@@ -41,7 +40,6 @@ impl SoftmaxCuda
 
             temperature,
             backward_passes_count: 0,
-            count: 0,
             batch_size: 0.0
         }
     }
