@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::process::exit;
 use std::collections::HashMap;
 
-use crate::cuda_bridge::{copy_host_to_cuda, new_cuda_array, softmax_ce_loss};
+use crate::cuda_bridge::{copy_host_to_cuda, free_cuda_array, new_cuda_array, softmax_ce_loss};
 use crate::layers::layer_cuda::LayerCuda;
 use crate::pointer_ops::{create_host_and_cuda_ptr, set_zero_counter};
 use crate::cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host};
@@ -370,7 +370,26 @@ impl NeuralNet
 
     pub fn delete(&mut self)
     {
-        // for each layer, free any pointers that aren't in the io_ptrs_record
+        // each layer frees their "detached" pointers 
+        //(pointers that aren't shared between layers)
+        for (_, layer) in self.all_cuda_layers.iter()
+        {
+            layer.free_detached_ptrs();
+        }
+
+        // free the pointers in the ip_ptrs_record hash map
+        unsafe 
+        {
+            for (_, traverse_ptr) in self.io_ptrs_record.iter()
+            {
+                free_cuda_array((**traverse_ptr).ptr);
+                free_cuda_array((**traverse_ptr).grad_ptr);
+                let _ = Box::from_raw((**traverse_ptr).backward_pass_count);
+
+                // free the traverse ptr itself
+                let _ = Box::from_raw(*traverse_ptr);
+            }
+        }
         
     }
 }
