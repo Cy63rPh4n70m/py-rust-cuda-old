@@ -1,8 +1,6 @@
 use std::{collections::HashMap, process::exit};
 
-use crate::{cuda_bridge::{conv2d_backward, 
-    conv2d_forward, gradient_desc_3d, new_cuda_array,
-     zeroes_3d_inplace}, math_functions::random_float_vec, 
+use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, free_cuda_array, gradient_desc_3d, new_cuda_array, zeroes_3d_inplace}, math_functions::random_float_vec, 
      neuralnet::TraversePtrs, pointer_ops::{counter_is_zero, cuda_ptr_to_vec, 
          increment_counter, init_trav_in_ptrs, set_zero_counter, vec_to_cuda_ptr}};
 
@@ -302,5 +300,21 @@ impl LayerCuda for Conv2dCuda
         }
 
         self.allocation_status.arrays_allocated = true;
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        free_cuda_array(self.parameter_ptrs.weight_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_grad_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_vel_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_moment_ptr);
+        
+        free_cuda_array(self.parameter_ptrs.biases_ptr);
+        free_cuda_array(self.parameter_ptrs.bias_grad_ptr);
+        free_cuda_array(self.parameter_ptrs.bias_vel_ptr);
+        free_cuda_array(self.parameter_ptrs.bias_moment_ptr);
+
+        free_cuda_array(self.input_grads_count_ptr);
+        free_cuda_array(self.filters_grad_count_ptr);
     }
 }
