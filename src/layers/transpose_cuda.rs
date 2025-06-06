@@ -10,7 +10,6 @@ pub struct BatchTransposeCuda
     pub allocation_status: AllocationStatus,
 
     pub batch_size: f32,
-    pub count: u128,
 }
 impl BatchTransposeCuda
 {
@@ -24,7 +23,6 @@ impl BatchTransposeCuda
             io_ptrs: IOPtrs::new((batch, rows, cols), (batch, cols, rows)),
             allocation_status: AllocationStatus::new(),
             batch_size: 0.0,
-            count: 0,
         }
     }
 
