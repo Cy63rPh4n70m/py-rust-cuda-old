@@ -129,7 +129,7 @@ void free_cpu_array_ext(float* array)
     free(array);
 }
 
-void free_cuda_array_ext(float* array)
+void free_cuda_array_ext(void* array)
 {
     cudaFree(array);
 }
