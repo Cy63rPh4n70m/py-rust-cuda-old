@@ -13,20 +13,12 @@ use layers::{
 use math_functions::{get_loss_deriv_from_str, get_loss_from_str};
 use ndarray::{ArrayD, IxDyn};
 use neuralnet::{NeuralNet, TraversePtrs};
-use storage::{ae_buf::AutoencoderBuf, storage_seq_buf::ReplayBuf};
 use types::{LossFn, LossFnDeriv};
 
 mod neuralnet;
 mod math_functions;
 mod types;
-mod batch;
-mod shaping;
-//mod io_functions;
 mod layers;
-mod storage;
-mod random_name_gen;
-mod heap_dict;
-mod parallel;
 mod cuda_bridge;
 mod pointer_ops;
 
