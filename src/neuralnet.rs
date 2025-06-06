@@ -1,4 +1,5 @@
 use core::f32;
+use std::ffi::c_void;
 use std::fs::{read_to_string, File};
 use std::io::{Read, Write};
 use std::process::exit;
@@ -382,8 +383,8 @@ impl NeuralNet
         {
             for (_, traverse_ptr) in self.io_ptrs_record.iter()
             {
-                free_cuda_array((**traverse_ptr).ptr);
-                free_cuda_array((**traverse_ptr).grad_ptr);
+                free_cuda_array((**traverse_ptr).ptr as *mut c_void);
+                free_cuda_array((**traverse_ptr).grad_ptr as *mut c_void);
                 let _ = Box::from_raw((**traverse_ptr).backward_pass_count);
 
                 // free the traverse ptr itself
