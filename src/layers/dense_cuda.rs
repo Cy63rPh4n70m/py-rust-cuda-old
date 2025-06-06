@@ -290,9 +290,9 @@ impl LayerCuda for DenseCuda
         if self.parameter_ptrs.weight_ptr_detached
         {
             free_cuda_array(self.parameter_ptrs.weight_ptr as *mut c_void);
+            free_cuda_array(self.parameter_ptrs.weight_grad_ptr as *mut c_void);
         }
 
-        free_cuda_array(self.parameter_ptrs.weight_grad_ptr as *mut c_void);
         free_cuda_array(self.parameter_ptrs.weight_vel_ptr as *mut c_void);
         free_cuda_array(self.parameter_ptrs.weight_moment_ptr as *mut c_void);
         
