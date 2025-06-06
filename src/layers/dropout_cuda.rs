@@ -1,7 +1,7 @@
 use std::os::raw::c_void;
 
 use crate::{
-    cuda_bridge::{copy_cuda_to_cuda, dropout_backward, dropout_forward, init_random_states, new_cuda_array}, 
+    cuda_bridge::{copy_cuda_to_cuda, dropout_backward, dropout_forward, free_cuda_array, init_random_states, new_cuda_array}, 
     neuralnet::TraversePtrs, 
     pointer_ops::{increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
@@ -150,5 +150,11 @@ impl LayerCuda for DropoutCuda
         println!("Dropout rate: {:?}", self.dropout_rate);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        free_cuda_array(self.rand_state_v_ptr);
+        free_cuda_array(self.dropout_mask_ptr as *mut c_void);
     }
 }
