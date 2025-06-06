@@ -121,7 +121,7 @@ pub unsafe extern "C" fn add_embedding_2d_cuda_layer(
 #[no_mangle]
 pub unsafe extern "C" fn add_conv2d_cuda_layer(
     vp: *mut c_void, n_filters: usize, filter_dim: usize, strides: usize, 
-    batch: usize, rows: usize, cols: usize, flatten: bool, id: *mut c_char
+    batch: usize, rows: usize, cols: usize, id: *mut c_char
 ) -> *mut c_char
 {
     let nn: *mut NeuralNet = vp as *mut NeuralNet;
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn add_conv2d_cuda_layer(
         Box::new(
             Conv2dCuda::new(
                 n_filters, filter_dim, strides, batch, rows, cols,
-                flatten, "conv2d"
+                "conv2d"
             )
         )
     );
