@@ -4,8 +4,7 @@ use core::hash;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
-    cuda_bridge::{gradient_desc_3d, matmul_add_bias_back, 
-        matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, 
+    cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, 
         neuralnet::TraversePtrs, pointer_ops::{counter_is_zero, cuda_ptr_to_vec, 
             increment_counter, init_trav_in_ptrs, 
             set_zero_counter, vec_to_cuda_ptr}};
@@ -91,6 +90,8 @@ impl LayerCuda for DenseCuda
                 self.parameter_ptrs.weight_grad_ptr = new_cuda_array(
                     (batch * cols * self.io_ptrs.out_shape.2) as u32
                 );
+
+                self.parameter_ptrs.weight_ptr_detached = true;
             }
             else
             {
@@ -100,6 +101,8 @@ impl LayerCuda for DenseCuda
                     self.parameter_ptrs.weight_grad_ptr = (*trav_ptr_weight).grad_ptr;
                     self.io_ptrs.backward_count_weight_prev = (*trav_ptr_weight).backward_pass_count;
                 }
+
+                self.parameter_ptrs.weight_ptr_detached = false;
             }
 
             self.parameter_ptrs.weight_vel_ptr = new_cuda_array(
@@ -280,5 +283,22 @@ impl LayerCuda for DenseCuda
         }
 
         self.allocation_status.arrays_allocated = true;
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        if self.parameter_ptrs.weight_ptr_detached
+        {
+            free_cuda_array(self.parameter_ptrs.weight_ptr);
+        }
+
+        free_cuda_array(self.parameter_ptrs.weight_grad_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_vel_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_moment_ptr);
+        
+        free_cuda_array(self.parameter_ptrs.biases_ptr);
+        free_cuda_array(self.parameter_ptrs.bias_grad_ptr);
+        free_cuda_array(self.parameter_ptrs.bias_vel_ptr);
+        free_cuda_array(self.parameter_ptrs.bias_moment_ptr);
     }
 }
