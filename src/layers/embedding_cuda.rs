@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ffi::c_void};
 
 use crate::{
     cuda_bridge::{embedding_backward, embedding_forward, free_cuda_array, gradient_desc_3d, new_cuda_array}, 
@@ -188,12 +188,12 @@ impl LayerCuda for Embedding2DCuda
 
     fn free_detached_ptrs(&self) 
     {
-        free_cuda_array(self.parameter_ptrs.weight_ptr);
-        free_cuda_array(self.parameter_ptrs.weight_grad_ptr);
-        free_cuda_array(self.parameter_ptrs.weight_vel_ptr);
-        free_cuda_array(self.parameter_ptrs.weight_moment_ptr);
+        free_cuda_array(self.parameter_ptrs.weight_ptr  as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_grad_ptr  as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_vel_ptr  as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_moment_ptr  as *mut c_void);
 
-        free_cuda_array(self.embedding_lookup_grad_count_ptr);
-        free_cuda_array(self.embedding_lookup_grad_temp_ptr);
+        free_cuda_array(self.embedding_lookup_grad_count_ptr  as *mut c_void);
+        free_cuda_array(self.embedding_lookup_grad_temp_ptr  as *mut c_void);
     }
 }
