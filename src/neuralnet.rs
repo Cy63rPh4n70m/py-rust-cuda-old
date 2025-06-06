@@ -1,11 +1,11 @@
 use core::f32;
 use std::ffi::c_void;
-use std::fs::{read_to_string, File};
+use std::fs::File;
 use std::io::{Read, Write};
 use std::process::exit;
 use std::collections::HashMap;
 
-use crate::cuda_bridge::{copy_host_to_cuda, free_cpu_array, free_cuda_array, free_pinned_array, new_cuda_array, softmax_ce_loss};
+use crate::cuda_bridge::{copy_host_to_cuda, free_cuda_array, free_pinned_array, new_cuda_array, softmax_ce_loss};
 use crate::layers::layer_cuda::LayerCuda;
 use crate::pointer_ops::{create_host_and_cuda_ptr, set_zero_counter};
 use crate::cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host};
@@ -349,13 +349,17 @@ impl NeuralNet
         let file: Result<File, std::io::Error> = File::open(filepath);
         if file.is_err()
         {
-            println!("Error: {} ", file.unwrap_err());
+            println!("Error: {} (Unable to located {})", file.unwrap_err(), filepath);
             exit(1);
         }
 
         let mut file: File = file.unwrap();
         let mut json_string: String = String::new();
-        file.read_to_string(&mut json_string);
+        if let Err(e) = file.read_to_string(&mut json_string)
+        {
+            print!("Error: {}", e);
+            exit(1);
+        }
 
         let json_hashmap: HashMap<&str, HashMap<&str, Vec<f32>>> = 
             serde_json::from_str(&json_string).unwrap();
