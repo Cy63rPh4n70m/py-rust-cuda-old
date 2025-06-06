@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 use std::process::exit;
 use std::collections::HashMap;
 
-use crate::cuda_bridge::{copy_host_to_cuda, free_cuda_array, new_cuda_array, softmax_ce_loss};
+use crate::cuda_bridge::{copy_host_to_cuda, free_cpu_array, free_cuda_array, free_pinned_array, new_cuda_array, softmax_ce_loss};
 use crate::layers::layer_cuda::LayerCuda;
 use crate::pointer_ops::{create_host_and_cuda_ptr, set_zero_counter};
 use crate::cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host};
@@ -114,6 +114,7 @@ impl NeuralNet
 
         copy_host_to_host(ptrs.0, array_ptr, &[array_len]);
         let traverse_ptr_str: &*mut TraversePtrs = self.input_traverse_ptrs.get(&name).unwrap();
+        
         return traverse_ptr_str.clone();
     }
 
@@ -391,6 +392,29 @@ impl NeuralNet
                 let _ = Box::from_raw(*traverse_ptr);
             }
         }
+
+        // free the memory in input/output hashmaps and corresponding memory for gradients
+        for ((_, (host_ptr, _, _)), (_, (host_ptr_grad, _, _))) in 
+            self.input_ptrs.iter().zip(self.input_grad_ptrs.iter())
+        {
+            free_pinned_array(*host_ptr as *mut c_void);
+            free_pinned_array(*host_ptr_grad as *mut c_void);
+        }
+
+        for ((_, (host_ptr, _, _)), (_, (host_ptr_grad, _, _))) in 
+            self.output_ptrs.iter().zip(self.output_grad_ptrs.iter())
+        {
+            free_pinned_array(*host_ptr as *mut c_void);
+            free_pinned_array(*host_ptr_grad as *mut c_void);
+        }
+
+        // clear memory in cross entropy data hash map
+        for (_, (loss_val_host, _, target_classes, _)) in self.output_softmax_ce_data.iter()
+        {
+            free_pinned_array(*loss_val_host as *mut c_void);
+            free_cuda_array(*target_classes as *mut c_void);
+        }
+
         
     }
 }

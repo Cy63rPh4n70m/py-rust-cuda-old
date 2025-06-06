@@ -134,6 +134,11 @@ void free_cuda_array_ext(void* array)
     cudaFree(array);
 }
 
+void free_pinned_array_ext(void* host)
+{
+    cudaFreeHost(host);
+}
+
 KernelDim get_kernel_dim(unsigned int n_threads)
 {
     // get the 3d index given number of total threads required and the shape

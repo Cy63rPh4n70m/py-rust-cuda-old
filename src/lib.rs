@@ -471,6 +471,9 @@ pub unsafe extern "C" fn delete(ptr: *mut c_void)
 {
     let nn: *mut NeuralNet = ptr as *mut NeuralNet;
     (*nn).delete();
+
+    // free the neural net object itself
+    let _ = Box::from_raw(nn);
 }
 
 //////////////////////////////////////////////////////////////////
