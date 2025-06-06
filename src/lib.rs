@@ -466,6 +466,13 @@ pub unsafe extern "C" fn load(ptr: *mut c_void, path: *mut c_char)
     (*nn).load(path);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn delete(ptr: *mut c_void)
+{
+    let nn: *mut NeuralNet = ptr as *mut NeuralNet;
+    (*nn).delete();
+}
+
 //////////////////////////////////////////////////////////////////
 // for storage buffer
 
