@@ -1,7 +1,4 @@
-
-
-use core::hash;
-use std::{collections::HashMap, ffi::c_void, hash::Hash};
+use std::{collections::HashMap, ffi::c_void};
 
 use crate::{
     cuda_bridge::{free_cuda_array, gradient_desc_3d, matmul_add_bias_back, matmul_add_bias_tiled, new_cuda_array}, math_functions::random_float_vec, 
