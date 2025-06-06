@@ -29,6 +29,7 @@ extern "C"
     __declspec(dllexport) void copy_cuda_to_host_array(float* dst, float* src, unsigned int length);
     __declspec(dllexport) void free_cpu_array_ext(float* array);
     __declspec(dllexport) void free_cuda_array_ext(void* array);
+    __declspec(dllexport) void free_pinned_array_ext(void* host);
     __declspec(dllexport) void cuda_to_cuda_ext(float* dst, float* src, unsigned int length);
 }
 

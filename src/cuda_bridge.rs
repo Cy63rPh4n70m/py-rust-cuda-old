@@ -231,6 +231,7 @@ extern "C"
     fn cuda_to_cuda_ext(dst: *mut f32, src: *mut f32, length: u32);
     fn free_cpu_array_ext(array: *mut f32);
     fn free_cuda_array_ext(array: *mut c_void);
+    fn free_pinned_array_ext(array: *mut c_void);
 }
 
 
@@ -915,4 +916,9 @@ pub unsafe fn free_cpu_array(array: *mut f32)
 pub fn free_cuda_array(array: *mut c_void)
 {
     unsafe { free_cuda_array_ext(array); }
+}
+
+pub fn free_pinned_array(array: *mut c_void)
+{
+    unsafe { free_pinned_array_ext(array); }
 }
