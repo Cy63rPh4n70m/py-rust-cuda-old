@@ -28,7 +28,6 @@ pub struct ElementwiseCuda
     pub activation_scale: f32,
 
     pub batch_size: f32,
-    pub count: u128,
 }
 impl ElementwiseCuda
 {
@@ -65,7 +64,6 @@ impl ElementwiseCuda
             range,
             //out_shape,
             batch_size: 0.0,
-            count: 0,
         }
     }
 }

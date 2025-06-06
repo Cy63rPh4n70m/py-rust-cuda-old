@@ -12,7 +12,6 @@ pub struct SumCuda
 
     pub axis: i32,
     pub batch_size: f32,
-    pub count: u128,
 }
 impl SumCuda
 {
@@ -40,7 +39,6 @@ impl SumCuda
             axis,
 
             batch_size: 0.0,
-            count: 0,
         }
     }
 
