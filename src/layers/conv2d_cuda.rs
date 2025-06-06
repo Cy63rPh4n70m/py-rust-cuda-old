@@ -25,17 +25,14 @@ pub struct Conv2dCuda
     pub input_grads_count_ptr: *mut f32,
 
     pub batch_size: f32,
-    pub count: u128,
-
     pub use_bias: bool,
-    pub flatten: bool
 }
 impl Conv2dCuda
 {
     // weight matrix initialize during first ever run
     pub fn new(
         n_filters: usize, filter_dim: usize, strides: usize,
-        batch: usize, rows: usize, cols: usize, flatten: bool, name: &str
+        batch: usize, rows: usize, cols: usize, name: &str
     ) -> Self
     {
         let stride_count_y: usize = ((rows - filter_dim) / strides) + 1;
@@ -80,9 +77,7 @@ impl Conv2dCuda
             stride_count_y: 0,
             stride_count_x: 0,
             batch_size: 0.0,
-            count: 0,
             use_bias: true,
-            flatten,
 
             io_ptrs: IOPtrs::new(in_shape, out_shape),
             parameter_ptrs: ParameterPtrs::new(),
