@@ -11,7 +11,7 @@ pub trait LayerCuda
     fn backward(&mut self, use_dropout: bool);
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32);
     fn details(&self);
-    fn free_detached_ptrs(&self);
+    fn free_detached_ptrs(&self) {}
 
     fn get_param_count(&self) -> usize
     {
