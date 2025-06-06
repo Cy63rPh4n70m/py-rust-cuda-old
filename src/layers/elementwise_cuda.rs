@@ -2,8 +2,7 @@ use std::{collections::HashMap, os::raw::c_void, process::exit};
 
 use crate::{
     cuda_bridge::{
-        elementwise_dropout_backward, elementwise_dropout_forward, 
-        gradient_desc_3d, init_random_states, new_cuda_array}, 
+        elementwise_dropout_backward, elementwise_dropout_forward, free_cuda_array, gradient_desc_3d, init_random_states, new_cuda_array}, 
         math_functions::random_float_vec, neuralnet::TraversePtrs, 
         pointer_ops::{counter_is_zero, 
             cuda_ptr_to_vec, increment_counter, init_trav_in_ptrs, 
@@ -95,6 +94,8 @@ impl LayerCuda for ElementwiseCuda
                 self.parameter_ptrs.weight_grad_ptr = new_cuda_array(
                     shape_flat
                 );
+
+                self.parameter_ptrs.weight_ptr_detached = true;
             }
             else
             {
@@ -104,6 +105,8 @@ impl LayerCuda for ElementwiseCuda
                     self.parameter_ptrs.weight_grad_ptr = (*trav_ptr_weight).grad_ptr;
                     self.io_ptrs.backward_count_weight_prev = (*trav_ptr_weight).backward_pass_count;
                 }
+
+                self.parameter_ptrs.weight_ptr_detached = false;
             }
 
             init_trav_in_ptrs(
@@ -282,5 +285,20 @@ impl LayerCuda for ElementwiseCuda
     {
         self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
         self.allocation_status.arrays_allocated = true;
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        if self.parameter_ptrs.weight_ptr_detached
+        {
+            free_cuda_array(self.parameter_ptrs.weight_ptr as *mut c_void);
+            free_cuda_array(self.parameter_ptrs.weight_grad_ptr as *mut c_void);
+        }
+        
+        free_cuda_array(self.parameter_ptrs.weight_vel_ptr as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_moment_ptr as *mut c_void);
+
+        free_cuda_array(self.rand_state_v_ptr);
+        free_cuda_array(self.dropout_mask_ptr as *mut c_void);
     }
 }
