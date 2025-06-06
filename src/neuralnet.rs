@@ -114,6 +114,12 @@ impl NeuralNet
 
         copy_host_to_host(ptrs.0, array_ptr, &[array_len]);
         let traverse_ptr_str: &*mut TraversePtrs = self.input_traverse_ptrs.get(&name).unwrap();
+
+        if !self.io_ptrs_record.contains_key(&name)
+        {
+            self.io_ptrs_record.insert(name.clone(), *traverse_ptr_str);
+        }
+        
         return traverse_ptr_str.clone();
     }
 
