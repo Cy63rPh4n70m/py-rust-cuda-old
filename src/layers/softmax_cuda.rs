@@ -1,6 +1,8 @@
 
+use std::ffi::c_void;
+
 use crate::{
-    cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, new_cuda_array, scalar_op_3d_inplace, softmax_forward}, 
+    cuda_bridge::{copy_cuda_to_cuda, element_op_3d_inplace, free_cuda_array, new_cuda_array, scalar_op_3d_inplace, softmax_forward}, 
     neuralnet::TraversePtrs, 
     pointer_ops::{counter_is_zero, increment_counter, init_trav_in_ptrs, set_zero_counter}};
 
@@ -148,5 +150,13 @@ impl LayerCuda for SoftmaxCuda
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
         println!("Shape: {:?}", self.io_ptrs.in_shape);
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        free_cuda_array(self.input_exp_ptr as *mut c_void);
+        free_cuda_array(self.exp_sum_ptr as *mut c_void);
+        free_cuda_array(self.broadcast_temp_ptr as *mut c_void);
+        free_cuda_array(self.input_grad_temp as *mut c_void);
     }
 }
