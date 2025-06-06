@@ -17,7 +17,6 @@ pub struct DropoutCuda
     pub rand_state_v_ptr: *mut c_void,
     pub dropout_rate: f32,
     pub batch_size: f32,
-    pub count: u128,
 }
 impl DropoutCuda
 {
@@ -35,7 +34,6 @@ impl DropoutCuda
             dropout_mask_ptr: std::ptr::null_mut(),
             rand_state_v_ptr: std::ptr::null_mut(),
             batch_size: 0.0,
-            count: 0,
         }
     }
 }

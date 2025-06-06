@@ -13,7 +13,6 @@ pub struct BroadcastCuda
 
     pub axis: i32,
     pub batch_size: f32,
-    pub count: u128,
 }
 impl BroadcastCuda
 {
@@ -41,7 +40,6 @@ impl BroadcastCuda
             axis,
 
             batch_size: 0.0,
-            count: 0,
         }
     }
 

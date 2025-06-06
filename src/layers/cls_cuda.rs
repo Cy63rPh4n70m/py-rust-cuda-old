@@ -11,7 +11,6 @@ pub struct CLSCuda
 
     pub token_idx: usize,
     pub batch_size: f32,
-    pub count: u128,
 }
 impl CLSCuda
 {
@@ -30,7 +29,6 @@ impl CLSCuda
             allocation_status: AllocationStatus::new(),
             token_idx,
             batch_size: 0.0,
-            count: 0,
         }
     }
 }

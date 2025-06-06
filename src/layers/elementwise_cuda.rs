@@ -23,12 +23,10 @@ pub struct ElementwiseCuda
     pub dropout_rate: f32,
 
     pub op: u32,
-    pub range: f32,
     pub activation_fn_id: i32,
     pub activation_scale: f32,
 
     pub batch_size: f32,
-    pub count: u128,
 }
 impl ElementwiseCuda
 {
@@ -62,10 +60,8 @@ impl ElementwiseCuda
             activation_fn_id,
             activation_scale,
 
-            range,
             //out_shape,
             batch_size: 0.0,
-            count: 0,
         }
     }
 }

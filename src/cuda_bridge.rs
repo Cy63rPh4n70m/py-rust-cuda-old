@@ -3,12 +3,6 @@ use std::{os::raw::c_void, process::exit};
 #[link(name="test/nnpackage/backend/cuda_backend", kind="dylib")]
 extern "C"
 {
-    fn matmul_bias_ext(
-        mat0: *mut f32, z0: u32, y0: u32, x0: u32,
-        mat1: *mut f32, z1: u32, y1: u32, x1: u32,
-        result: *mut f32, mat2: *mut f32
-    );
-
     fn matmul_bias_tiled_ext(
         mat0: *mut f32, z0: u32, y0: u32, x0: u32,
         mat1: *mut f32, z1: u32, y1: u32, x1: u32,
@@ -35,26 +29,6 @@ extern "C"
         z: i32, y: i32, x: i32, func_id: i32, 
         scale: f32, zero_input_grad: bool
     );
-    fn layer_norm_ext(
-        output_ptr: *mut f32, 
-        normalized_ptr: *mut f32, 
-        original_ptr: *mut f32,
-        mean_ptr: *mut f32, 
-        //first_pass: u32, second_pass: u32,
-        //mean_temp: *mut f32, temp_z: u32, temp_y: u32, temp_x: u32,
-        var_ptr: *mut f32, 
-        alphas: *mut f32, betas: *mut f32,
-        z0: u32, y0: u32, x0: u32, axis: i32
-    );
-    fn layer_norm_back_ext(
-        return_ptr: *mut f32, original_grads: *mut f32, original_ptr: *mut f32, normalized_ptr: *mut f32,
-        mean_ptr: *mut f32, var_ptr: *mut f32, 
-        mean_grads_ptr: *mut f32, var_grads_ptr: *mut f32,
-        alphas: *mut f32, betas: *mut f32,
-        alpha_grads: *mut f32, beta_grads: *mut f32,
-        z0: i32, y0: i32, x0: i32, axis: i32
-    );
-
     fn conv2d_forward_ext(
         input_img: *mut f32, filters: *mut f32, output_img: *mut f32,
         in_z: u32, in_y: u32, in_x: u32,
@@ -157,12 +131,6 @@ extern "C"
         z0: u32, y0: u32, x0: u32, zero_output: bool
     );
 
-    fn softmax_backward_ext(
-        original_grads: *mut f32, exp_input: *mut f32, result_grads: *mut f32, 
-        exp_sum: *mut f32, temperature: f32,
-        z0: u32, y0: u32, x0: u32, zero_input_grad: bool
-    );
-
     fn dropout_forward_ext(
         input: *mut f32, output: *mut f32, mask: *mut f32, states: *mut c_void,
         z0: u32, y0: u32, x0: u32, dropout_rate: f32
@@ -192,10 +160,8 @@ extern "C"
     ////////////////////////////////////////////////////////////////////////////
 
     fn element_op_3d_ext(dst: *mut f32, src: *mut f32, op: i32, z0: i32, y0: i32, x0: i32);
-    fn element_op_3d_ret_ext(c: *mut f32, a: *mut f32, b: *mut f32, op: i32, z0: i32, y0: i32, x0: i32);
     fn scalar_op_3d_inplace_ext(dst: *mut f32, scalar: f32, op: i32, z0: i32, y0: i32, x0: i32);
     fn zeroes_3d_ext(dst: *mut f32, z0: i32, y0: i32, x0: i32);
-    fn round_3d_ext(arr: *mut f32, places: i32, z0: i32, y0: i32, x0: i32);
     fn gradient_desc_3d_ext(
         lr: f32, l2: f32,
         weight_ptr: *mut f32, weight_ptr_grad: *mut f32, weight_velocity: *mut f32, weight_momentum: *mut f32, 
@@ -209,7 +175,6 @@ extern "C"
     fn broadcast_2d_to_3d_ext(
         broadcasted: *mut f32, z0: u32, y0: u32, x0: u32, original: *mut f32, axis: i32);
     fn sum_axis_ext(summed: *mut f32, original: *mut f32, z0: u32, y0: u32, x0: u32, axis: i32, zeroed: bool);
-    fn mean_axis_ext(averaged: *mut f32, original: *mut f32, z0: u32, y0: u32, x0: u32, axis: i32);
 
     fn softmax_ce_loss_ext(
         pred: *mut f32, classes: *mut f32, loss_vals: *mut f32, grad_ptr: *mut f32, 
@@ -217,31 +182,16 @@ extern "C"
     );
 
     fn init_cuda_array(length: u32) -> *mut f32;
-    fn init_cuda_array_f16(length: u32) -> *mut half::f16;
-    fn init_cpu_array(length: u32) -> *mut f32;
     fn init_cpu_pinned_array(length: u32) -> *mut f32;
     fn to_cuda_array(array: *mut f32, length: u32) -> *mut f32;
     fn to_cpu_array(cuda_array: *mut f32, length: u32) -> *mut f32;
-    fn to_cpu_array_f16(cuda_array: *mut half::f16, length: u32) -> *mut half::f16;
     fn cuda_ptr_from_pinned_ext(host: *mut f32) -> *mut f32;
     fn copy_host_to_cuda_array(dst: *mut f32, src: *mut f32, length: u32);
-    fn copy_host_to_cuda_array_f16(dst: *mut half::f16, src: *mut half::f16, length: u32);
-    fn copy_cuda_to_host_array(dst: *mut f32, src: *mut f32, length: u32);
     fn copy_host_to_host_ext(dst: *mut f32, src: *mut f32, length: u32);
     fn cuda_to_cuda_ext(dst: *mut f32, src: *mut f32, length: u32);
     fn free_cpu_array_ext(array: *mut f32);
     fn free_cuda_array_ext(array: *mut c_void);
     fn free_pinned_array_ext(array: *mut c_void);
-}
-
-
-pub fn matmul_add_bias(
-    mat0: *mut f32, z0: u32, y0: u32, x0: u32, 
-    mat1: *mut f32, z1: u32, y1: u32, x1: u32,
-    result: *mut f32, mat2: *mut f32
-)
-{
-    unsafe { matmul_bias_ext(mat0, z0, y0, x0, mat1, z1, y1, x1, result, mat2); }//, broadcast_buffer);
 }
 
 pub fn matmul_add_bias_tiled(
@@ -328,50 +278,6 @@ pub fn activation3d_cuda_backward(
             z as i32, y as i32, x as i32, func_id as i32,
             scale, zero_input_grad
         ); 
-    }
-}
-
-pub fn layer_norm_forward(
-    output_ptr: *mut f32, normalized_ptr: *mut f32, original_ptr: *mut f32,
-    mean_ptr: *mut f32, 
-    //first_pass: usize, second_pass: usize,
-    //mean_temp: *mut f32, temp_z: usize, temp_y: usize, temp_x: usize,
-    var_ptr: *mut f32, alphas: *mut f32, betas: *mut f32,
-    z0: usize, y0: usize, x0: usize, axis: usize
-)
-{
-    unsafe 
-    {
-        layer_norm_ext(
-            output_ptr, normalized_ptr, original_ptr,
-            mean_ptr, 
-            //first_pass as u32, second_pass as u32,
-            //mean_temp, temp_z as u32, temp_y as u32, temp_x as u32,
-            var_ptr, alphas, betas,
-            z0 as u32, y0 as u32, x0 as u32, axis as i32
-        );
-    }
-}
-
-pub fn layer_norm_backward(
-    return_ptr: *mut f32, original_grads: *mut f32, original_ptr: *mut f32, normalized_ptr: *mut f32,
-    mean_ptr: *mut f32, var_ptr: *mut f32, 
-    mean_grads_ptr: *mut f32, var_grads_ptr: *mut f32,
-    alphas: *mut f32, betas: *mut f32,
-    alpha_grads: *mut f32, beta_grads: *mut f32,
-    z0: usize, y0: usize, x0: usize, axis: usize
-)
-{
-    unsafe
-    {
-        layer_norm_back_ext(
-            return_ptr, original_grads, original_ptr, normalized_ptr,
-            mean_ptr, var_ptr, 
-            mean_grads_ptr, var_grads_ptr,
-            alphas, betas,
-            alpha_grads, beta_grads,
-            z0 as i32, y0 as i32, x0 as i32, axis as i32
-        );
     }
 }
 
@@ -620,22 +526,6 @@ pub fn softmax_forward(
     }
 }
 
-pub fn softmax_backward(
-    original_grads: *mut f32, exp_input: *mut f32, result_grads: *mut f32, 
-    exp_sum: *mut f32, temperature: f32,
-    z0: usize, y0: usize, x0: usize, zero_input_grad: bool
-)
-{
-    unsafe
-    {
-        softmax_backward_ext(
-            original_grads, exp_input, result_grads, 
-            exp_sum, temperature,
-            z0 as u32, y0 as u32, x0 as u32, zero_input_grad
-        );
-    }
-}
-
 pub fn dropout_forward(
     input: *mut f32, output: *mut f32, mask: *mut f32, states: *mut c_void,
     z0: usize, y0: usize, x0: usize, dropout_rate: f32
@@ -722,13 +612,6 @@ pub fn element_op_3d_inplace(
     unsafe { element_op_3d_ext(dst, src, op, z0 as i32, y0 as i32, x0 as i32) };
 }
 
-pub fn element_op_3d_ret(
-    c: *mut f32, a: *mut f32, b: *mut f32, op: i32, z0: usize, y0: usize, x0: usize
-)
-{
-    unsafe { element_op_3d_ret_ext(c, a, b, op, z0 as i32, y0 as i32, x0 as i32) };
-}
-
 pub fn scalar_op_3d_inplace(
     dst: *mut f32, scalar: f32, op: i32, z0: usize, y0: usize, x0: usize
 )
@@ -739,11 +622,6 @@ pub fn scalar_op_3d_inplace(
 pub fn zeroes_3d_inplace(dst: *mut f32, z0: usize, y0: usize, x0: usize)
 {
     unsafe { zeroes_3d_ext(dst, z0 as i32, y0 as i32, x0 as i32); }
-}
-
-pub unsafe fn round_3d_inplace(arr: *mut f32, places: i32, z0: i32, y0: i32, x0: i32)
-{
-    round_3d_ext(arr, places, z0, y0, x0);
 }
 
 pub fn gradient_desc_3d(
@@ -792,11 +670,6 @@ pub fn sum_axis(summed: *mut f32, original: *mut f32, z0: usize, y0: usize, x0: 
     unsafe { sum_axis_ext(summed, original, z0 as u32, y0 as u32, x0 as u32, axis, zeroed) };
 }
 
-pub fn mean_axis(averaged: *mut f32, original: *mut f32, z0: usize, y0: usize, x0: usize, axis: i32)
-{
-    unsafe { mean_axis_ext(averaged, original, z0 as u32, y0 as u32, x0 as u32, axis) };
-}
-
 pub fn softmax_ce_loss(
     pred: *mut f32, classes: *mut f32, loss_vals: *mut f32, grad_ptr: *mut f32, 
     z0: i32, y0: i32, x0: i32
@@ -818,13 +691,6 @@ pub fn new_cuda_array(
     unsafe { return init_cuda_array(length) };
 }
 
-pub fn new_cuda_array_f16(
-    length: u32, 
-) -> *mut half::f16
-{
-    unsafe { return init_cuda_array_f16(length) };
-}
-
 pub fn new_cpu_pinned_array(
     length: u32
 ) -> *mut f32
@@ -835,13 +701,6 @@ pub fn new_cpu_pinned_array(
 pub fn cuda_ptr_from_pinned(host: *mut f32) -> *mut f32
 {
     unsafe {return cuda_ptr_from_pinned_ext(host);}
-}
-
-pub fn new_cpu_array(
-    length: u32
-) -> *mut f32
-{
-    unsafe { return init_cpu_array(length) };
 }
 
 pub fn to_cuda(
@@ -862,20 +721,9 @@ pub unsafe fn to_cpu(
     return to_cpu_array(cuda_array, length);
 }
 
-pub unsafe fn to_cpu_f16(
-    cuda_array: *mut half::f16, length: u32) -> *mut half::f16
-{
-    return to_cpu_array_f16(cuda_array, length);
-}
-
 pub fn copy_host_to_cuda(dst: *mut f32, src: *mut f32, length: u32)
 {
     unsafe {copy_host_to_cuda_array(dst, src, length);}
-}
-
-pub fn copy_host_to_cuda_f16(dst: *mut half::f16, src: *mut half::f16, length: u32)
-{
-    unsafe {copy_host_to_cuda_array_f16(dst, src, length);}
 }
 
 pub fn copy_host_to_host(dst: *mut f32, src: *mut f32, shape: &[usize])
@@ -886,16 +734,6 @@ pub fn copy_host_to_host(dst: *mut f32, src: *mut f32, shape: &[usize])
         length *= shape[i];
     }
     unsafe { copy_host_to_host_ext(dst, src, length as u32); }
-}
-
-pub fn copy_cuda_to_host(dst: *mut f32, src: *mut f32, shape: &[usize])
-{
-    let mut length: usize = 1;
-    for i in 0..shape.len()
-    {
-        length *= shape[i];
-    }
-    unsafe { copy_cuda_to_host_array(dst, src, length as u32); }
 }
 
 pub fn copy_cuda_to_cuda(dst: *mut f32, src: *mut f32, shape: &[usize])
