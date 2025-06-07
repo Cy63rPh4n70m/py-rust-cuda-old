@@ -190,7 +190,7 @@ impl LayerCuda for Conv2dCuda
 
         //println!("{:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
         //println!("{:?}", cuda_ptr_to_array(filter_grad_ptr, &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]));
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
         //exit(1);
         self.batch_size += 1.0;
         //let end = start.elapsed();

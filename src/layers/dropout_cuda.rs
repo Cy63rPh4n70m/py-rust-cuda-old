@@ -122,7 +122,7 @@ impl LayerCuda for DropoutCuda
         //println!("backward {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
         //exit(1);
 
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
         //let end = start.elapsed();
         //println!("backward: {:.6}", end.as_secs_f64());
 

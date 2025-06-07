@@ -108,7 +108,7 @@ impl LayerCuda for SoftmaxCuda
                 self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
             );
         }
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
         self.batch_size += 1.0;
 
         ////println!("=========================================================");

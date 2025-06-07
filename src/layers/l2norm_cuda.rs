@@ -81,9 +81,9 @@ impl LayerCuda for L2NormCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
 
         l2norm_backward(
@@ -93,7 +93,7 @@ impl LayerCuda for L2NormCuda
             self.io_ptrs.input_grad_ptr, self.allocation_status.zero_input_grad
         );
         self.batch_size += 1.0;
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
 
         //println!("{:?}", cuda_ptr_to_array(original_grads, &[self.shape.0, self.shape.1, self.shape.2]));
         //println!("{:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));

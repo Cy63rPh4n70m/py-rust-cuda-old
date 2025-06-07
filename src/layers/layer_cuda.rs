@@ -140,8 +140,8 @@ impl AllocationStatus
             arrays_allocated: false,
 
             zero_output: true,
-            zero_input_grad: false,
-            zero_weight_grad: false
+            zero_input_grad: true,
+            zero_weight_grad: true
         }
     }
 }

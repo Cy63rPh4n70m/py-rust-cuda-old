@@ -66,10 +66,9 @@ impl LayerCuda for ActivationCuda
     {
         ////println!("current_grads: {:?}", cuda_ptr_to_array(grad_ptr.get_ptr(), grad_ptr.get_shape()));
         ////println!("recored_inputs: {:?}", cuda_ptr_to_array(input_ptr, grad_ptr.get_shape()));
-
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
         activation3d_cuda_backward(
             self.io_ptrs.input_grad_ptr, self.io_ptrs.input_ptr, 
@@ -78,7 +77,7 @@ impl LayerCuda for ActivationCuda
             self.io_ptrs.in_shape.2 as u32, 
             &self.activation_str, self.scale, self.allocation_status.zero_input_grad
         );
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
 
         self.batch_size += 1.0;
 

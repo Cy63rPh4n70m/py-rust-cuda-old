@@ -146,14 +146,14 @@ impl LayerCuda for DenseCuda
     {
         // controls whether this layer will zero the gradients for the previous layer
         // only zeros when the counter in the previous layer is zero
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
 
-        if counter_is_zero(self.io_ptrs.backward_count_weight_prev)
+        if !counter_is_zero(self.io_ptrs.backward_count_weight_prev)
         {
-            self.allocation_status.zero_weight_grad = true;
+            self.allocation_status.zero_weight_grad = false;
         }
         
         matmul_add_bias_back(
@@ -174,8 +174,12 @@ impl LayerCuda for DenseCuda
             self.allocation_status.zero_weight_grad
         );
 
-        // potential error, wrong counter being incremented
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
+
+        if !self.parameter_ptrs.weight_ptr_detached
+        {
+            increment_counter(self.io_ptrs.backward_count_weight_prev);
+        }
 
         self.batch_size += 1.0;
 
