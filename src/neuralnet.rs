@@ -359,8 +359,8 @@ impl NeuralNet
     }
 
     // load specified JSON file and obtain data as a hash map
-    // each layer updates their weight tensors if available by using
-    // layer IDs as hash map keys
+    // each layer updates their weight tensors if layer ID is available
+    // in hash map
     pub fn load(&mut self, filepath: &str)
     {
         let file: Result<File, std::io::Error> = File::open(filepath);
