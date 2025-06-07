@@ -5,7 +5,6 @@
 
 use std::{ffi::{c_char, CStr}, os::raw::c_void, process::exit};
 
-//use io_functions::{load_model, save_model};
 use layers::{
     activation_cuda::ActivationCuda, broadcast_cuda::BroadcastCuda, 
     cls_cuda::CLSCuda, conv2d_cuda::Conv2dCuda, dense_cuda::DenseCuda, 
@@ -25,6 +24,7 @@ mod layers;
 mod cuda_bridge;
 mod pointer_ops;
 
+// create a neural net and returns it as a void pointer to Python frontend
 #[no_mangle]
 pub unsafe extern "C" fn create_model() -> *mut c_void
 {
@@ -33,7 +33,13 @@ pub unsafe extern "C" fn create_model() -> *mut c_void
     return Box::into_raw(Box::new(nn_model)) as *mut c_void;
 }
 
-// CUDA layers
+// ---------------------------------------------------------------
+// Functions to create layers in neural nets given the void pointer 
+// (called by Python frontend), all return layer names 
+// to the Python frontend, with a number added in front of them to prevent
+// duplication
+// Layer names returned are important for forward and gradient descent calls
+
 #[no_mangle]
 pub unsafe extern "C" fn add_dense_cuda_layer(
     vp: *mut c_void, n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, id: *mut c_char
@@ -284,7 +290,10 @@ pub unsafe extern "C" fn add_cls_cuda_layer(
     return new_name_terminated.as_mut_ptr() as *mut c_char;
 }
 
-/////////////////////////////////////////////////////////////////////
+// ---------------------------------------------------------------
+
+// Accepts numpy array from Python frontend, returns traverse pointer
+// casted to void pointer
 #[no_mangle]
 pub unsafe extern "C" fn pass_to_input(
     vp: *mut c_void, name: *mut c_char, array_ptr: *mut f32, array_len: usize
@@ -297,6 +306,8 @@ pub unsafe extern "C" fn pass_to_input(
     return traverse_ptr as *mut c_void;
 }
 
+// Accepts traverse pointer casted to void pointer from Python frontend and 
+// return float pointer which is converted to a numpy array
 #[no_mangle]
 pub unsafe extern "C" fn pass_to_output(
     vp: *mut c_void, name: *mut c_char, traverse_v_ptr: *mut c_void, array_len: usize
@@ -309,6 +320,8 @@ pub unsafe extern "C" fn pass_to_output(
     return array_output;
 }
 
+// accepts target classes as an array of integers casted to float 
+// (array length equals to softmax rows) and returns loss values as float pointer
 #[no_mangle]
 pub unsafe extern "C" fn ce_loss(
     vp: *mut c_void, output_name: *mut c_char, target_classes: *mut f32,
@@ -322,6 +335,7 @@ pub unsafe extern "C" fn ce_loss(
     return loss_vals;
 }
 
+// accepts numpy array of gradients
 #[no_mangle]
 pub unsafe extern "C" fn pass_to_output_grad(
     vp: *mut c_void, name: *mut c_char, array_ptr: *mut f32, array_len: usize
@@ -332,6 +346,7 @@ pub unsafe extern "C" fn pass_to_output_grad(
     (*nn).pass_to_output_grad(name, array_ptr, array_len);
 }
 
+// forward function to be called by Python frontend
 #[no_mangle]
 pub unsafe extern "C" fn forward(
     vp: *mut c_void, layer_id: *mut c_char, trav_in_v_ptr: *mut c_void, trav_weight_v_ptr: *mut c_void
@@ -349,7 +364,7 @@ pub unsafe extern "C" fn forward(
     return traverse_ptr as *mut c_void;
 }
 
-// assuming output is always 1 dimensional
+// Python frontend calls backpropagation method
 #[no_mangle]
 pub unsafe extern "C" fn backward(
     vp: *mut c_void
@@ -359,6 +374,8 @@ pub unsafe extern "C" fn backward(
     (*nn).backward();
 }
 
+// Called by Python frontend to perform gradient descent on a specified layer
+// given ID
 #[no_mangle]
 pub unsafe extern "C" fn update_params(
     vp: *mut c_void, layer_id: *mut c_char, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32
@@ -369,6 +386,7 @@ pub unsafe extern "C" fn update_params(
     (*nn).update_params(name, optimizer_type, lr, l2, alpha, beta);
 }
 
+// Set whether dropout should be used during forward and backward pass
 #[no_mangle]
 pub unsafe extern "C" fn set_dropout(
     vp: *mut c_void, use_dropout: bool
@@ -393,6 +411,7 @@ pub unsafe extern "C" fn free_nn(ptr: *mut c_void)
     std::mem::drop(nn_boxed);
 }
 
+// Host side function to calculate the loss between two numpy arrays
 #[no_mangle]
 pub unsafe extern "C" fn loss(
     loss_fn: *mut c_char, array1: *mut f32, array2: *mut f32, flattened_len: usize) -> f32
@@ -412,6 +431,7 @@ pub unsafe extern "C" fn loss(
     return loss_value;
 }
 
+// Host side function to calculate the loss gradient between two numpy arrays
 #[no_mangle]
 pub unsafe extern "C" fn loss_grads(
     loss_fn: *mut c_char, array1: *mut f32, array2: *mut f32, flattened_len: usize) -> *mut f32
@@ -437,6 +457,7 @@ pub unsafe extern "C" fn loss_grads(
     return grads_vec_ptr;
 }
 
+// Function to call by Python frontend to print model details
 #[no_mangle]
 pub unsafe extern "C" fn details(ptr: *mut c_void)
 {
@@ -444,6 +465,7 @@ pub unsafe extern "C" fn details(ptr: *mut c_void)
     (*nn).details();
 }
 
+// Save to JSON function for Python frontend
 #[no_mangle]
 pub unsafe extern "C" fn save(ptr: *mut c_void, path: *mut c_char)
 {
@@ -452,6 +474,7 @@ pub unsafe extern "C" fn save(ptr: *mut c_void, path: *mut c_char)
     (*nn).save(path);
 }
 
+// Load from JSON function for Python frontend
 #[no_mangle]
 pub unsafe extern "C" fn load(ptr: *mut c_void, path: *mut c_char)
 {
@@ -460,6 +483,7 @@ pub unsafe extern "C" fn load(ptr: *mut c_void, path: *mut c_char)
     (*nn).load(path);
 }
 
+// Free memory function for Python frontend
 #[no_mangle]
 pub unsafe extern "C" fn delete(ptr: *mut c_void)
 {
