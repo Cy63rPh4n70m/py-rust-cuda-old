@@ -1,3 +1,8 @@
+//! Main file of the Rust backend Machine Learning project
+//! 
+//! Contains functions that can be called by the Python frontend to
+//! facilitate data exchange and method calls for neural nets
+
 use std::{ffi::{c_char, CStr}, os::raw::c_void, process::exit};
 
 //use io_functions::{load_model, save_model};
