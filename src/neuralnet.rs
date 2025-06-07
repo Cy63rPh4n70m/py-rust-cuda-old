@@ -84,11 +84,13 @@ impl NeuralNet
         };
     }
 
+    // add new layer and name
     pub fn add_cuda_layer(&mut self, name: String, layer: Box<dyn LayerCuda>)
     {
         self.all_cuda_layers.insert(name, layer);
     }
 
+    // pass numpy array from Python frontend and memory copy to raw pointers
     pub fn pass_to_input(&mut self, name: String, array_ptr: *mut f32, array_len: usize) -> *mut TraversePtrs
     {
         if !self.input_ptrs.contains_key(&name)
@@ -107,6 +109,7 @@ impl NeuralNet
         let ptrs: &mut (*mut f32, *mut f32, u32) = self.input_ptrs.get_mut(&name).unwrap();
         let grad_ptrs: &mut (*mut f32, *mut f32, u32) = self.input_grad_ptrs.get_mut(&name).unwrap();
 
+        // create new traveral pointer if not initialized
         if ptrs.0.is_null()
         {
             let (host_ptr_str, cuda_ptr_str) = create_host_and_cuda_ptr(array_len);
@@ -137,6 +140,7 @@ impl NeuralNet
         return traverse_ptr_str.clone();
     }
 
+    // receive traversal pointer and return output array back to Python frontend
     pub fn pass_to_output(&mut self, name: String, traverse_ptr: *mut TraversePtrs, array_len: usize) -> *mut f32
     {
 
@@ -155,9 +159,6 @@ impl NeuralNet
         // host pointer is pinned, gpu pointer can access directly
         let ptrs: &mut (*mut f32, *mut f32, u32) = self.output_ptrs.get_mut(&name).unwrap();
         let grad_ptrs: &mut (*mut f32, *mut f32, u32) = self.output_grad_ptrs.get_mut(&name).unwrap();
-
-        //let traverse_ptr_str: String = char_ptr_to_string(traverse_ptr);
-        //let traverse_struct: *mut TraversePtrs = string_to_traverse_ptr(&traverse_ptr_str);
 
         // set the output/output_grad pointers
         if ptrs.0.is_null()
@@ -182,6 +183,10 @@ impl NeuralNet
         return ptrs.0;
     }
 
+    // - uses CUDA to calculate the cross entropy loss given the target classes as integers
+    //   for utilization of parallelization
+    // - training data no longer need to store huge one hotted output arrays, saves
+    //   memory usage
     pub fn ce_loss_fn(&mut self, output_name: String, target_classes: *mut f32, batch: usize, rows: usize, cols: usize) -> *mut f32
     {
         let traverse_ptr: &*mut TraversePtrs = self.output_traverse_ptrs.get(&output_name).unwrap();
@@ -214,16 +219,11 @@ impl NeuralNet
             pred, classes, loss_vals_cuda, grad_ptr, batch as i32, rows as i32, cols as i32
         );
 
-        //println!("{:?}", cuda_ptr_to_array(loss_vals_host, &[batch, rows, 1]));
-        //unsafe 
-        //{
-        //    println!("{:?}", cuda_ptr_to_array((*traverse_struct).ptr, &[batch, rows, cols]));
-        //    println!("{:?}", cuda_ptr_to_array((*traverse_struct).grad_ptr, &[batch, rows, cols]));
-        //}
-
         return loss_vals_host;
     }
 
+    // pass numpy array from Python frontend and memory copy to specified output traversal
+    // pointer, which is also connected to the output pointer of output layer
     pub fn pass_to_output_grad(&mut self, name: String, array_ptr: *mut f32, array_len: usize)
     {
         // host pointer is pinned, gpu pointer can access directly
@@ -237,12 +237,9 @@ impl NeuralNet
             grad_ptrs.1, 
             &[array_len]
         );
-        //unsafe {
-        //    println!("{:?}", cuda_ptr_to_array((*traverse_struct).ptr, &[array_len]));
-        //    println!("{:?}", cuda_ptr_to_array((*traverse_struct).grad_ptr, &[array_len]));
-        //}
     }
 
+    // main method for forward propagation, also builds the pointer connections between layers
     pub fn forward(&mut self, layer_id: String, trav_in_ptr: *mut TraversePtrs, trav_weight_ptr: *mut TraversePtrs) -> *mut TraversePtrs
     {
         if !self.all_cuda_layers.contains_key(&layer_id)
@@ -253,12 +250,13 @@ impl NeuralNet
         let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(&layer_id).unwrap();
         let new_traverse_ptr: *mut TraversePtrs = layer.forward(trav_in_ptr, trav_weight_ptr, self.apply_dropout);
 
-        // store the output pointers
+        // store the output pointers, needed for easier memory frees
         if !self.io_ptrs_record.contains_key(&layer_id)
         {
             self.io_ptrs_record.insert(layer_id.clone(), new_traverse_ptr);
         }
 
+        // record forward call order
         if !self.backward_path_container.contains_key(&layer_id)
         {
             self.backward_path.push(layer_id.clone());
@@ -268,31 +266,35 @@ impl NeuralNet
         return new_traverse_ptr;
     }
 
+    // - reverse iterate the backward_path vector, perform backpropagation
+    // - layer pointers have already been connected during the forward pass
     pub fn backward(&mut self)
     {
-        // backpropagate through layers, reverse of the layer path
         for layer_name in self.backward_path.iter().rev()
         {
             let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(layer_name).unwrap();
-            //println!("started {:?}", layer_name);
             layer.backward(self.apply_dropout);
-            //println!("completed {:?}", layer_name);
         }
     }
 
+    // perform gradient descent on specified layer given ID
     pub fn update_params(&mut self, layer_id: &str, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {
         let layer: &mut Box<dyn LayerCuda> = self.all_cuda_layers.get_mut(layer_id).unwrap();
         layer.update_params(optimizer_type, lr, l2, alpha, beta);
 
-        // zero the main backward pass count, 
+        // zero the main backward pass count
         set_zero_counter(self.backward_pass_count);
     }
 
+    // get details of all layers in neural net, provides the total number of parameters
     pub fn details(&self)
     {
         let mut count: usize = 0;
         let mut cuda_layer_vec: Vec<(usize, &String, &Box<dyn LayerCuda>)> = Vec::new();
+        
+        // - record all layer references in a vector that can be sorted
+        // - ensures order is consistent when printing details of each layer
         for (layer_id, layer) in self.all_cuda_layers.iter()
         {
             let layer_id_splitted: Vec<&str> = layer_id.split("_").collect();
@@ -316,11 +318,15 @@ impl NeuralNet
         println!("MODEL_BYTE_SIZE: {:?}", count * 4);
     }
 
+    // sets whether dropout should be enabled during forward and backward passes
     pub fn set_dropout(&mut self, use_dropout: bool)
     {
         self.apply_dropout = use_dropout;
     }
 
+    // - write only the weight tensors for each layer if available to a hash map
+    //   that is converted to JSON
+    // - saves model state in JSON file, easy for model checkpointing
     pub fn save(&mut self, filepath: &str)
     {
         let mut json_hashmap: HashMap<&str, HashMap<&str, Vec<f32>>> = HashMap::new();
@@ -352,6 +358,9 @@ impl NeuralNet
         
     }
 
+    // load specified JSON file and obtain data as a hash map
+    // each layer updates their weight tensors if available by using
+    // layer IDs as hash map keys
     pub fn load(&mut self, filepath: &str)
     {
         let file: Result<File, std::io::Error> = File::open(filepath);
@@ -382,6 +391,9 @@ impl NeuralNet
         }
     }
 
+    // frees all the pointers allocated in all layers and hash map attributes
+    // to prevent memory leaks, important since neural nets can be created and
+    // destroyed multiple times in the Python frontend
     pub fn delete(&mut self)
     {
         // each layer frees their "detached" pointers 
