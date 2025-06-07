@@ -80,9 +80,9 @@ impl LayerCuda for BroadcastCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
 
         sum_axis(

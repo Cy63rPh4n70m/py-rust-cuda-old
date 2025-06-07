@@ -150,14 +150,14 @@ impl LayerCuda for ElementwiseCuda
 
     fn backward(&mut self, use_dropout: bool)
     {
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
         
-        if counter_is_zero(self.io_ptrs.backward_count_weight_prev)
+        if !counter_is_zero(self.io_ptrs.backward_count_weight_prev)
         {
-            self.allocation_status.zero_weight_grad = true;
+            self.allocation_status.zero_weight_grad = false;
         }
 
         elementwise_dropout_backward(
