@@ -78,7 +78,7 @@ impl LayerCuda for ActivationCuda
             self.io_ptrs.in_shape.2 as u32, 
             &self.activation_str, self.scale, self.allocation_status.zero_input_grad
         );
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
 
         self.batch_size += 1.0;
 

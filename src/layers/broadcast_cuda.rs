@@ -91,7 +91,7 @@ impl LayerCuda for BroadcastCuda
             self.axis, self.allocation_status.zero_input_grad
         );
 
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
         self.batch_size += 1.0;
         
         /*

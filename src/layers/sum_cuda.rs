@@ -90,7 +90,7 @@ impl LayerCuda for SumCuda
         );
 
         self.batch_size += 1.0;
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
         
         //let end = start.elapsed();
         //println!("backward: {:.6}", end.as_secs_f64());

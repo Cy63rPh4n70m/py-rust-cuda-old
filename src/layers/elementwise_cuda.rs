@@ -170,7 +170,12 @@ impl LayerCuda for ElementwiseCuda
             self.op, self.allocation_status.zero_input_grad, self.allocation_status.zero_weight_grad
         );
         
-        increment_counter(self.io_ptrs.backward_count);
+        increment_counter(self.io_ptrs.backward_count_in_prev);
+
+        if !self.parameter_ptrs.weight_ptr_detached
+        {
+            increment_counter(self.io_ptrs.backward_count_weight_prev);
+        }
 
         self.batch_size += 1.0;
         ////println!("B");
