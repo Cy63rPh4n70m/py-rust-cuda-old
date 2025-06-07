@@ -8,6 +8,10 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
+/// Embedding layer consists of a 2D lookup table, usually the  
+/// first layer in a model and mainly used in  
+/// language processing where each row in the table contains info  
+/// about a word or token, embedding matrix is trained  
 pub struct Embedding2DCuda
 {
     pub io_ptrs: IOPtrs,
@@ -56,12 +60,11 @@ impl Embedding2DCuda
 
 impl LayerCuda for Embedding2DCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         if !self.allocation_status.ptrs_allocated
         {   
-
+            // initialize embedding pointers
             let embedding_lookup_len: u32 = (1 * self.vocab_size * self.embedding_len) as u32;
 
             self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
@@ -84,11 +87,7 @@ impl LayerCuda for Embedding2DCuda
             self.allocation_status.arrays_allocated = true;
         }
 
-        ////println!("{:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        ////println!("{:?}", cuda_ptr_to_array(embedding_lookup_ptr, &[1, self.vocab_size, self.embedding_len]));
-        ////println!("{:?}", self.embedding_lookup_mat);
-        ////println!("{:?}", cuda_ptr_to_array(result_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-
+        // CUDA function to obtain the required token embeddings
         embedding_forward(
             self.io_ptrs.input_ptr, self.seq_len, 
             self.parameter_ptrs.weight_ptr, self.vocab_size, self.embedding_len, 
@@ -96,19 +95,12 @@ impl LayerCuda for Embedding2DCuda
         );
 
         set_zero_counter(self.io_ptrs.backward_count);
-
-        //println!("{:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        //println!("{:?}", cuda_ptr_to_array(embedding_lookup_ptr, &[1, self.vocab_size, self.embedding_len]));
-        //println!("{:?}", cuda_ptr_to_array(result_ptr, &[1, self.in_shape.2, self.embedding_len]));
-
+        
         return self.io_ptrs.output_traverse_ptr;
     }
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        ////println!("{:?}", cuda_ptr_to_array(ptr.get_ptr(), &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        ////println!("{:?}", cuda_ptr_to_array(embedding_lookup_grad_ptr, &[1, self.vocab_size, self.embedding_len]));
-
         embedding_backward(
             self.io_ptrs.input_ptr, self.seq_len, 
             self.parameter_ptrs.weight_ptr, self.vocab_size, self.embedding_len, 
@@ -120,10 +112,6 @@ impl LayerCuda for Embedding2DCuda
         );
 
         self.batch_size += 1.0;
-
-        //println!("{:?}", cuda_ptr_to_array(input_ptr, &[1, 1, self.seq_len]));
-        //println!("{:?}", cuda_ptr_to_array(embedding_lookup_grad_ptr, &[1, self.vocab_size, self.embedding_len]));
-        //exit(1);
     }
 
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
@@ -161,8 +149,6 @@ impl LayerCuda for Embedding2DCuda
 
     fn move_ptrs_to_arrays(&mut self)
     {
-        //free_cuda_array(string_to_ptr(&self.embedding_lookup_ptr));
-        //free_cuda_array(string_to_ptr(&self.embedding_lookup_grad_ptr));
         self.weight_tensors.weight = cuda_ptr_to_vec(
             self.parameter_ptrs.weight_ptr, 
             1 * self.vocab_size * self.embedding_len
