@@ -396,21 +396,6 @@ pub unsafe extern "C" fn set_dropout(
     (*nn).set_dropout(use_dropout)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn free_array(array_ptr: *mut f32, len: usize)
-{
-    let output_vec: Vec<f32> = Vec::from_raw_parts(array_ptr, len, len);
-    std::mem::drop(output_vec);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn free_nn(ptr: *mut c_void)
-{
-    let nn: *mut NeuralNet = ptr as *mut NeuralNet;
-    let nn_boxed: Box<NeuralNet> = Box::from_raw(nn);
-    std::mem::drop(nn_boxed);
-}
-
 // Host side function to calculate the loss between two numpy arrays
 #[no_mangle]
 pub unsafe extern "C" fn loss(
