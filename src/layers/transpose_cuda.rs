@@ -35,6 +35,7 @@ impl LayerCuda for BatchTransposeCuda
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
 
+        // link previous layer with current layer
         if !self.allocation_status.ptrs_allocated
         {   
             init_trav_in_ptrs(
@@ -50,6 +51,7 @@ impl LayerCuda for BatchTransposeCuda
             self.allocation_status.arrays_allocated = true;
         }
 
+        // CUDA transpose
         transpose_2d(
             self.io_ptrs.output_ptr, self.io_ptrs.input_ptr, 
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
