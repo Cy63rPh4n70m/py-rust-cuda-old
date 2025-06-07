@@ -4,6 +4,10 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// obtains only a 1D slice of a 2D array
+/// specifically for language/sequence processing
+/// where only one contextually rich token is selected
+/// for classification purposes
 pub struct CLSCuda
 {
     pub io_ptrs: IOPtrs,
@@ -37,6 +41,7 @@ impl LayerCuda for CLSCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
+        // link with previous layer
         if !self.allocation_status.ptrs_allocated
         {
             init_trav_in_ptrs(
@@ -56,10 +61,8 @@ impl LayerCuda for CLSCuda
         let chosen_embedding_ptr: *mut f32 = unsafe { self.io_ptrs.input_ptr.add(self.token_idx * self.io_ptrs.in_shape.2) };
         copy_cuda_to_cuda(self.io_ptrs.output_ptr, chosen_embedding_ptr, &[self.io_ptrs.in_shape.2]);
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
-
-        //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[1, 1, self.shape.2]));
 
         return self.io_ptrs.output_traverse_ptr;
 
@@ -67,24 +70,13 @@ impl LayerCuda for CLSCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
+        // pointer arithmetic
         let chosen_dst_ptr: *mut f32 = unsafe { self.io_ptrs.input_grad_ptr.add(self.token_idx * self.io_ptrs.in_shape.2) };
         copy_cuda_to_cuda(chosen_dst_ptr, self.io_ptrs.output_grad_ptr, &[self.io_ptrs.in_shape.2]);
 
         increment_counter(self.io_ptrs.backward_count_in_prev);
 
         self.batch_size += 1.0;
-        
-        //let end = start.elapsed();
-        //println!("backward: {:.6}", end.as_secs_f64());
-
-        
-        //println!("original_grads: {:?}\n", cuda_ptr_to_array(&[self.shape.0, self.shape.1, self.shape.2]));
-        //ptr.set_ptr(input_grad_ptr, vec![self.shape.0, self.shape.1, self.shape.2]);
-        //println!("input_gradients: {:?}\n", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //println!("weight_gradients: {:?}\n", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("=========================================================");
-        //exit(1);      
     }
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
