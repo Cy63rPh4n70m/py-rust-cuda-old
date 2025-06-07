@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use crate::neuralnet::TraversePtrs;
 
+// LayerCuda trait is important for all layer implementations
+// contains methods that all layers must implement, simulate inheritance
 pub trait LayerCuda
 {
     fn forward(
@@ -24,7 +26,12 @@ pub trait LayerCuda
     fn load_weights_from_hashmap(&mut self, _hashmap: &HashMap<&str, Vec<f32>>) {}
 }
 
-// composition structs to reduce code repetition
+// ----------------------------------------------------------
+// composition structs are used to reduce code repetition
+// used along with LayerCuda trait to simulate inheritance
+
+// - contains pointers involved with transferring data between layers
+// - includes input/output shape for layers
 pub struct IOPtrs
 {
     pub in_shape: (usize, usize, usize),
@@ -60,7 +67,9 @@ impl IOPtrs
     }
 }
 
-
+// includes the pointers for layer weights (if applicable), 
+// along with pointers required during training of the weights
+// using AdamW optimizer
 pub struct ParameterPtrs
 {
     pub weight_ptr: *mut f32,
@@ -96,6 +105,8 @@ impl ParameterPtrs
     }
 }
 
+// keeps track of whether pointers has been allocated in layers to prevent
+// repeated memory allocations during forward and backward passes
 pub struct AllocationStatus
 {
     pub ptrs_allocated: bool, 
@@ -121,6 +132,8 @@ impl AllocationStatus
     }
 }
 
+// stores weights in vector types, required for saving model state
+// to JSON and vice-versa
 pub struct WeightTensors
 {
     pub weight: Vec<f32>,
