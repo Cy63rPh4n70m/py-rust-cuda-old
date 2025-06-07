@@ -1,5 +1,3 @@
-#![allow(non_camel_case_types)]
-
 use std::{ffi::{c_char, CStr}, os::raw::c_void, process::exit};
 
 //use io_functions::{load_model, save_model};
