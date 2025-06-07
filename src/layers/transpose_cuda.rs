@@ -4,6 +4,7 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// Perform transpose operation on input
 pub struct BatchTransposeCuda
 {
     pub io_ptrs: IOPtrs,
@@ -56,9 +57,6 @@ impl LayerCuda for BatchTransposeCuda
 
         set_zero_counter(self.io_ptrs.backward_count);
 
-        //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.2, self.shape.1]));
-
         return self.io_ptrs.output_traverse_ptr;
     }
 
@@ -71,14 +69,6 @@ impl LayerCuda for BatchTransposeCuda
 
         increment_counter(self.io_ptrs.backward_count_in_prev);
         self.batch_size += 1.0;
-
-        //println!("original_grads: {:?}\n", cuda_ptr_to_array(&[self.shape.0, self.shape.1, self.shape.2]));
-        //ptr.set_ptr(input_grad_ptr, vec![self.shape.0, self.shape.1, self.shape.2]);
-        //println!("input_gradients: {:?}\n", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //println!("weight_gradients: {:?}\n", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("=========================================================");
-        //exit(1);      
     }
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
