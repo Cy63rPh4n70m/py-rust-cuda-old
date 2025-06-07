@@ -2,6 +2,7 @@ use crate::{
     cuda_bridge::{cuda_ptr_from_pinned, free_cpu_array, new_cpu_pinned_array, 
         new_cuda_array, to_cpu, to_cuda}, neuralnet::TraversePtrs};
 
+/// copy values from Vec<f32> to float CUDA array
 pub fn vec_to_cuda_ptr(array: &mut Vec<f32>) -> *mut f32
 {
     let ptr: *mut f32 = array.as_mut_ptr();
@@ -9,6 +10,7 @@ pub fn vec_to_cuda_ptr(array: &mut Vec<f32>) -> *mut f32
     return cuda_ptr;
 }
 
+/// CUDA array values are copied to a host pointer to obtain CUDA array values as Vec<f32>
 pub fn cuda_ptr_to_vec(ptr: *mut f32, length: usize) -> Vec<f32>
 {
     unsafe 
@@ -23,6 +25,8 @@ pub fn cuda_ptr_to_vec(ptr: *mut f32, length: usize) -> Vec<f32>
     }
 }
 
+/// Create a pinned host pointer, along with a CUDA pointer that can have direct  
+/// access without explicit memory copying required
 pub fn create_host_and_cuda_ptr(flattened_shape: usize) -> (*mut f32, *mut f32)
 {
     let pinned_ptr: *mut f32 = new_cpu_pinned_array(flattened_shape as u32);
@@ -31,6 +35,9 @@ pub fn create_host_and_cuda_ptr(flattened_shape: usize) -> (*mut f32, *mut f32)
     return (pinned_ptr, cuda_ptr)
 }
 
+// -----------------------------------------------------------
+// counter related functions required by layers to check whether
+// gradients are to be accumulated or zeroed/overwritten
 pub fn increment_counter(backward_pass_count: *mut usize)
 {
     unsafe { *backward_pass_count += 1 }
@@ -63,6 +70,10 @@ pub fn counter_is_zero(backward_pass_count: *mut usize) -> bool
     }
 }
 
+// -----------------------------------------------------------
+
+/// links layers together, output pointers of one layer will be the  
+/// input pointers of the subsequent one
 pub fn init_trav_in_ptrs(
     trav_in_ptrs: &*mut TraversePtrs, backward_count: &mut *mut usize,
     backward_count_in_prev: &mut *mut usize,
