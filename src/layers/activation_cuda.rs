@@ -35,7 +35,8 @@ impl ActivationCuda
 impl LayerCuda for ActivationCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
-    {       
+    {    
+        // link previous layer
         if !self.allocation_status.ptrs_allocated
         {
             init_trav_in_ptrs(
@@ -51,11 +52,14 @@ impl LayerCuda for ActivationCuda
             self.allocation_status.arrays_allocated = true;
         }
 
+        // call CUDA activation function
         activation3d_cuda(
             self.io_ptrs.output_ptr, self.io_ptrs.input_ptr, 
             self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.1 as u32, self.io_ptrs.in_shape.2 as u32, 
             &self.activation_str, self.scale, self.allocation_status.zero_output
         );
+
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
 
         return self.io_ptrs.output_traverse_ptr;
@@ -63,6 +67,7 @@ impl LayerCuda for ActivationCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
+        // zero input grads only if counter in previous layer is zero
         if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
             self.allocation_status.zero_input_grad = false;
