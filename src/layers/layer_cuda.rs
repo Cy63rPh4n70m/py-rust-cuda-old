@@ -6,18 +6,37 @@ use crate::neuralnet::TraversePtrs;
 // contains methods that all layers must implement, simulate inheritance
 pub trait LayerCuda
 {
+    /// forward propagation
     fn forward(
         &mut self, inputs: *mut TraversePtrs, weights: *mut TraversePtrs, use_dropout: bool
     ) -> *mut TraversePtrs;
+
+    /// backpropagation
     fn backward(&mut self, use_dropout: bool);
+
+    /// perform gradient descent
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32);
+    
+    // obtain layer details (e.g. shape, weights, etc)
     fn details(&self);
 
     // default implementations
+
+    /// only frees the pointers that are "detached"  
+    /// (pointers that aren't shared between layers)
     fn free_detached_ptrs(&self) {}
+
+    /// required for getting the total number of parameters in the entire model
     fn get_param_count(&self) -> usize { return 0_usize; }
+
+    /// required for saving layer parameters
     fn move_ptrs_to_arrays(&mut self) {}
+
+    /// returns the parameters as a hash map, and None if no trainable parameters  
+    /// are available
     fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>> { return None; }
+
+    /// loads parameters stored in hashmap from JSON
     fn load_weights_from_hashmap(&mut self, _hashmap: &HashMap<&str, Vec<f32>>) {}
 }
 
