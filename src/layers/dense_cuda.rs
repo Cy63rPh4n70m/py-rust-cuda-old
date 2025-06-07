@@ -8,6 +8,9 @@ use crate::{
 
 use super::layer_cuda::{LayerCuda, AllocationStatus, IOPtrs, ParameterPtrs, WeightTensors};
 
+/// Dense layer performs the usual matrix dot product  
+/// combined with bias addition  
+/// supports batched matrix multiplication
 pub struct DenseCuda
 {
     pub name: String,
@@ -43,7 +46,6 @@ impl DenseCuda
 
         return Self
         {
-            //io_ptrs,
             name: name.to_string(),
             use_bias,
             batch_size: 0.0,
@@ -55,9 +57,9 @@ impl DenseCuda
     }
 }
 
+// trait implementation for dense layer
 impl LayerCuda for DenseCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         let batch: usize = self.io_ptrs.in_shape.0;
@@ -78,7 +80,6 @@ impl LayerCuda for DenseCuda
                 (batch * rows * self.io_ptrs.out_shape.2) as u32
             );
 
-
             // decide whether to create weight based on pointer availability
             if trav_ptr_weight.is_null()
             {
@@ -92,6 +93,8 @@ impl LayerCuda for DenseCuda
             }
             else
             {
+                // set weight pointers with pointers in second traversal pointer
+                // links the output of another layer with this layer
                 unsafe
                 {
                     self.parameter_ptrs.weight_ptr = (*trav_ptr_weight).ptr;
@@ -102,6 +105,7 @@ impl LayerCuda for DenseCuda
                 self.parameter_ptrs.weight_ptr_detached = false;
             }
 
+            // initialize weight pointers needed for training
             self.parameter_ptrs.weight_vel_ptr = new_cuda_array(
                 (batch * cols * self.io_ptrs.out_shape.2) as u32
             );
@@ -112,7 +116,8 @@ impl LayerCuda for DenseCuda
             self.allocation_status.arrays_allocated = true;
             self.allocation_status.ptrs_allocated = true;
 
-            // initialize the input traversal pointers from input/previous layer
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -123,6 +128,7 @@ impl LayerCuda for DenseCuda
             );
         }
 
+        // call batched matrix multiplication method from CUDA library
         matmul_add_bias_tiled(
             self.io_ptrs.input_ptr, batch as u32, rows as u32, cols as u32, 
             self.parameter_ptrs.weight_ptr, batch as u32, cols as u32, self.io_ptrs.out_shape.2 as u32,
@@ -132,30 +138,19 @@ impl LayerCuda for DenseCuda
 
         set_zero_counter(self.io_ptrs.backward_count);
 
-        //println!("input: {:?}", cuda_ptr_to_vec(self.io_ptrs.input_ptr, batch * rows * cols));
-        //println!("weight: {:?}", cuda_ptr_to_vec(self.parameter_ptrs.weight_ptr, batch * cols * self.io_ptrs.out_shape.2));
-        //println!("output: {:?}\n", cuda_ptr_to_vec(self.io_ptrs.output_ptr, batch * rows * self.io_ptrs.out_shape.2));
-
         return self.io_ptrs.output_traverse_ptr;
 
     }
 
     fn backward(&mut self, _use_dropout: bool)
     {
-
-        ////println!("=========================================================");
-        ////println!("input_array: {:?}", cuda_ptr_to_array(input_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        ////println!("\nweights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        ////println!("\nmatmul result: {:?}", cuda_ptr_to_array(output_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-
-        //let start: Instant = Instant::now();
-        ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
+        // controls whether this layer will zero the gradients for the previous layer
+        // only zeros when the counter in the previous layer is zero
         if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
             self.allocation_status.zero_input_grad = true;
         }
-        
-        ////println!("{:?}", self.backward_count_weight_prev);
+
         if counter_is_zero(self.io_ptrs.backward_count_weight_prev)
         {
             self.allocation_status.zero_weight_grad = true;
@@ -179,20 +174,11 @@ impl LayerCuda for DenseCuda
             self.allocation_status.zero_weight_grad
         );
 
+        // potential error, wrong counter being incremented
         increment_counter(self.io_ptrs.backward_count);
 
         self.batch_size += 1.0;
 
-        //let end = start.elapsed();
-        ////println!("backward: {:.6}", end.as_secs_f64());
-
-        ////println!("\noriginal_grads: {:?}", cuda_ptr_to_array(output_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        //ptr.set_ptr(input_grad_ptr, vec![self.in_shape.0, self.in_shape.1, self.in_shape.2]);
-        ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        ////println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        ////println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        ////println!("=========================================================");
-        //exit(1);      
     }
 
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
