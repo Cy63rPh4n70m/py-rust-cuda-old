@@ -9,7 +9,9 @@ use crate::cuda_bridge::{copy_host_to_cuda, free_cuda_array, free_pinned_array, 
 use crate::layers::layer_cuda::LayerCuda;
 use crate::pointer_ops::{create_host_and_cuda_ptr, set_zero_counter};
 use crate::cuda_bridge::{copy_cuda_to_cuda, copy_host_to_host};
-// used in replacement of transferring arrays by value, more efficient
+
+// allows layers to pass their output data to subsequent layers during
+// forward call
 pub struct TraversePtrs
 {
     pub ptr: *mut f32,
@@ -17,26 +19,43 @@ pub struct TraversePtrs
     pub backward_pass_count: *mut usize // a pointer to the previous layer's counter
 }
 
+// the struct of the neural net itself
 pub struct NeuralNet
 {
+    // contains all layers created and their names/ID
     pub all_cuda_layers: HashMap<String, Box<dyn LayerCuda>>, // name -> layer
     pub apply_dropout: bool,
 
+    // stores the host and cuda pointers for input/output and
+    // gradient arrays received from Python frontend, prevent
+    // reallocation
     pub input_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub output_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub input_grad_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
     pub output_grad_ptrs: HashMap<String, (*mut f32, *mut f32, u32)>,
-    pub input_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
-    pub output_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
-    pub output_softmax_ce_data: HashMap<String, (*mut f32, *mut f32, *mut f32, *mut f32)>, // (loss_vals_host, loss_vals_cuda, int_classes, output_grad)
 
-    // order of cuda layer names to call for forward or backward
-    // booleans determine whether to initialize output/input grad to zero
-    // required when inputs/gradients are accumulated due to architectural design
+    // input traversal pointers consist of cuda pointers from input_ptrs hash map
+    pub input_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
+
+    // stores traversal pointers received from the last/output layer/s
+    pub output_traverse_ptrs: HashMap<String, *mut TraversePtrs>,
+
+    // stores arrays separate for outputs for calculating cross entropy loss
+    // with softmax, prevent reallocation
+    // (loss_vals_host, loss_vals_cuda, int_classes, output_grad)
+    pub output_softmax_ce_data: HashMap<String, (*mut f32, *mut f32, *mut f32, *mut f32)>,
+
+    // - keeps track of the order of layers during forward calls, contains the layer names
+    // - reversed during backward call for correct gradient calculation/gradient accumulation
     pub backward_path: Vec<String>,
     pub backward_path_container: HashMap<String, bool>,
+
+    // keeps track of "shared" pointers between layers, easier
+    // to keep track of memory to free and prevent double frees
     pub io_ptrs_record: HashMap<String, *mut TraversePtrs>,
 
+    // required for the very first input traversal pointers before
+    // being passed to the input layer/s
     pub backward_pass_count: *mut usize,
 }
 impl NeuralNet
