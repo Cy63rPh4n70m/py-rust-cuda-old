@@ -6,7 +6,7 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
-// performs the broadcast operation
+/// performs the broadcast operation
 pub struct BroadcastCuda
 {
     pub io_ptrs: IOPtrs,
@@ -15,9 +15,10 @@ pub struct BroadcastCuda
     pub axis: i32,
     pub batch_size: f32,
 }
+
+// implement constructor
 impl BroadcastCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(
         out_batch: usize, out_rows: usize, out_cols: usize, 
         axis: i32
@@ -46,14 +47,15 @@ impl BroadcastCuda
 
 }
 
+// trait implementation
 impl LayerCuda for BroadcastCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
-        // initialize pointers if not already
         if !self.allocation_status.ptrs_allocated
         {
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -74,6 +76,7 @@ impl LayerCuda for BroadcastCuda
             self.io_ptrs.input_ptr, self.axis
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
 
         return self.io_ptrs.output_traverse_ptr;
@@ -95,6 +98,8 @@ impl LayerCuda for BroadcastCuda
             self.axis, self.allocation_status.zero_input_grad
         );
 
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
         increment_counter(self.io_ptrs.backward_count_in_prev);
         self.batch_size += 1.0;
         
@@ -107,6 +112,7 @@ impl LayerCuda for BroadcastCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: BROADCAST");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);

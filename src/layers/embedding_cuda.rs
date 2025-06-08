@@ -28,11 +28,13 @@ pub struct Embedding2DCuda
 
     pub batch_size: f32,
 }
+
+// implement constructor
 impl Embedding2DCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(vocab_size: usize, embedding_len: usize, seq_len: usize) -> Self
     {
+        // initialise embedding matrix
         let range: f32 = (6.0 / ((embedding_len + embedding_len) as f32)).sqrt();
         let mut weight_tensors: WeightTensors = WeightTensors::new();
         weight_tensors.weight = random_float_vec(
@@ -58,6 +60,7 @@ impl Embedding2DCuda
     }
 }
 
+// trait implementation
 impl LayerCuda for Embedding2DCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
@@ -74,6 +77,8 @@ impl LayerCuda for Embedding2DCuda
             self.embedding_lookup_grad_count_ptr = new_cuda_array(embedding_lookup_len);
             self.embedding_lookup_grad_temp_ptr = new_cuda_array(embedding_lookup_len);
 
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -94,6 +99,7 @@ impl LayerCuda for Embedding2DCuda
             self.io_ptrs.output_ptr
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
         
         return self.io_ptrs.output_traverse_ptr;
@@ -101,6 +107,7 @@ impl LayerCuda for Embedding2DCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
+        // CUDA function to calculate embedding matrix gradients
         embedding_backward(
             self.io_ptrs.input_ptr, self.seq_len, 
             self.parameter_ptrs.weight_ptr, self.vocab_size, self.embedding_len, 
@@ -116,6 +123,7 @@ impl LayerCuda for Embedding2DCuda
 
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
+        // perform gradient descent with SGD or AdamW
         gradient_desc_3d(
             lr, l2,
             self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr,
@@ -134,6 +142,7 @@ impl LayerCuda for Embedding2DCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: Embedding2D");
         println!("Vocab shape: {:?}", (1, self.vocab_size, self.embedding_len));
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);

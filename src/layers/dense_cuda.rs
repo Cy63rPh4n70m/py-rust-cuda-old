@@ -23,13 +23,15 @@ pub struct DenseCuda
     pub weight_tensors: WeightTensors
 
 }
+
+// implement constructor
 impl DenseCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(
         n_in: usize, n_out: usize, batch: usize, rows: usize, use_bias: bool, name: &str
     ) -> Self
-    {        
+    {
+        // initalise weights and biases
         let mut weight_tensors: WeightTensors = WeightTensors::new();
 
         let range: f32 = (6.0 / (n_in + n_out) as f32).sqrt();
@@ -57,7 +59,7 @@ impl DenseCuda
     }
 }
 
-// trait implementation for dense layer
+// trait implementation
 impl LayerCuda for DenseCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
@@ -80,7 +82,7 @@ impl LayerCuda for DenseCuda
                 (batch * rows * self.io_ptrs.out_shape.2) as u32
             );
 
-            // decide whether to create weight based on pointer availability
+            // decide whether to create weight based on traversal pointer availability
             if trav_ptr_weight.is_null()
             {
                 // initialize weight ptrs
@@ -94,7 +96,7 @@ impl LayerCuda for DenseCuda
             else
             {
                 // set weight pointers with pointers in second traversal pointer
-                // links the output of another layer with this layer
+                // links the output of previous layer with this layer
                 unsafe
                 {
                     self.parameter_ptrs.weight_ptr = (*trav_ptr_weight).ptr;
@@ -136,6 +138,7 @@ impl LayerCuda for DenseCuda
             self.use_bias, self.allocation_status.zero_output
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
 
         return self.io_ptrs.output_traverse_ptr;
@@ -144,7 +147,8 @@ impl LayerCuda for DenseCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        // controls whether this layer will zero the gradients for the previous layer
+        // if statements control whether this layer will zero the gradients for the 
+        // previous layer/s
         // only zeros when the counter in the previous layer is zero
         if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
@@ -156,6 +160,7 @@ impl LayerCuda for DenseCuda
             self.allocation_status.zero_weight_grad = false;
         }
         
+        // CUDA function to calculate input and weight gradients uusing chain rule
         matmul_add_bias_back(
             self.io_ptrs.input_grad_ptr, 
             self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.1 as u32, 
@@ -174,8 +179,12 @@ impl LayerCuda for DenseCuda
             self.allocation_status.zero_weight_grad
         );
 
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
         increment_counter(self.io_ptrs.backward_count_in_prev);
 
+        // only if weight pointer is connected to another previous layer and isn't
+        // standalone
         if !self.parameter_ptrs.weight_ptr_detached
         {
             increment_counter(self.io_ptrs.backward_count_weight_prev);
@@ -187,6 +196,7 @@ impl LayerCuda for DenseCuda
 
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
+        // perform gradient descent with SGD or AdamW
         gradient_desc_3d(
             lr, l2,
             self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
@@ -205,6 +215,7 @@ impl LayerCuda for DenseCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: DENSE | Layer name: {:?}", self.name);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr);

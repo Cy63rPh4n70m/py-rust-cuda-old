@@ -10,6 +10,8 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
+/// Elementwise layer performs Hadamard product or 
+/// elementwise addition between two tensors
 pub struct ElementwiseCuda
 {
     pub io_ptrs: IOPtrs,
@@ -28,17 +30,18 @@ pub struct ElementwiseCuda
 
     pub batch_size: f32,
 }
+
+// implement constructor
 impl ElementwiseCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(
         batch: usize, rows: usize, cols: usize, 
         range: f32, op: u32, dropout_rate: f32, activation_fn_id: i32, 
         activation_scale: f32
     ) -> Self
     {
+        // initialize weights
         let shape_flat: usize = batch * rows * cols;
-        // initialise weights and weight pointer
         let mut weight_tensors: WeightTensors = WeightTensors::new();
         weight_tensors.weight = random_float_vec(
             shape_flat, 
@@ -59,30 +62,30 @@ impl ElementwiseCuda
             op,
             activation_fn_id,
             activation_scale,
-
-            //out_shape,
             batch_size: 0.0,
         }
     }
 }
 
+// trait implementation
 impl LayerCuda for ElementwiseCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, trav_ptr_weight: *mut TraversePtrs, use_dropout: bool) -> *mut TraversePtrs
     {
-
         if !self.allocation_status.ptrs_allocated
         {   
-
+            // initialize pointers for built in dropout functionality
             let shape_flat: u32 = (self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2) as u32;
             self.rand_state_v_ptr = init_random_states(
                 self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
             );
             self.dropout_mask_ptr = new_cuda_array(shape_flat);
+
+            // intialize pointers needed for weight training
             self.parameter_ptrs.weight_vel_ptr = new_cuda_array(shape_flat);
             self.parameter_ptrs.weight_moment_ptr = new_cuda_array(shape_flat);
             
+            // decide whether to create weight based on traversal pointer availability
             if trav_ptr_weight.is_null()
             {
                 // initialize weight ptrs
@@ -92,9 +95,11 @@ impl LayerCuda for ElementwiseCuda
                 );
 
                 self.parameter_ptrs.weight_ptr_detached = true;
-            }
+            } 
             else
             {
+                // set weight pointers with pointers in second traversal pointer
+                // links the output of previous layer with this layer
                 unsafe
                 {
                     self.parameter_ptrs.weight_ptr = (*trav_ptr_weight).ptr;
@@ -105,6 +110,8 @@ impl LayerCuda for ElementwiseCuda
                 self.parameter_ptrs.weight_ptr_detached = false;
             }
 
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -118,6 +125,8 @@ impl LayerCuda for ElementwiseCuda
             self.allocation_status.arrays_allocated = true;
         }
         
+        // CUDA function for elementwise operations, dropout and activation is built in
+        // to reduce kernel calls
         elementwise_dropout_forward(
             self.io_ptrs.input_ptr, self.parameter_ptrs.weight_ptr, self.io_ptrs.output_ptr, 
             self.dropout_mask_ptr, self.rand_state_v_ptr,
@@ -127,22 +136,8 @@ impl LayerCuda for ElementwiseCuda
             use_dropout, self.allocation_status.zero_output
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
-        //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("weights: {:?}", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("-----------------------------");
-        ////println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[batch, rows, cols]));
-        ////println!("weights: {:?}\n", cuda_ptr_to_array(weight_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-        // current pointer is already recorded by previous layer, don't free
-        //input.set_ptr(result_ptr, vec![self.shape.0, self.shape.1, self.shape.2]);
-
-        ////println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("-----------------------------");
-        //exit(1);
-        // previous pointer will be recorded in previous layer
 
         return self.io_ptrs.output_traverse_ptr;
 
@@ -150,6 +145,9 @@ impl LayerCuda for ElementwiseCuda
 
     fn backward(&mut self, use_dropout: bool)
     {
+        // if statements control whether this layer will zero the gradients for the 
+        // previous layer/s
+        // only zeros when the counter in the previous layer is zero
         if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
             self.allocation_status.zero_input_grad = false;
@@ -160,6 +158,7 @@ impl LayerCuda for ElementwiseCuda
             self.allocation_status.zero_weight_grad = false;
         }
 
+        // CUDA function to calculate input and weight gradients uusing chain rule
         elementwise_dropout_backward(
             self.io_ptrs.output_grad_ptr, self.dropout_mask_ptr, 
             self.io_ptrs.input_ptr, self.parameter_ptrs.weight_ptr, 
@@ -170,32 +169,23 @@ impl LayerCuda for ElementwiseCuda
             self.op, self.allocation_status.zero_input_grad, self.allocation_status.zero_weight_grad
         );
         
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
         increment_counter(self.io_ptrs.backward_count_in_prev);
 
+        // only if weight pointer is connected to another previous layer and isn't
+        // standalone
         if !self.parameter_ptrs.weight_ptr_detached
         {
             increment_counter(self.io_ptrs.backward_count_weight_prev);
         }
 
         self.batch_size += 1.0;
-        ////println!("B");
-        
-        //let end = start.elapsed();
-        ////println!("backward: {:.6}", end.as_secs_f64());
-
-        
-        ////println!("\noriginal_grads: {:?}", cuda_ptr_to_array(original_grads, &[self.shape.0, self.shape.1, self.shape.2]));
-        //ptr.set_ptr(input_grad_ptr, vec![self.in_shape.0, self.in_shape.1, self.in_shape.2]);
-        ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("=========================================================");
-        //exit(1);      
-        // calculate summed respect to bias
-        // calculate bias gradients
     }
 
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
+        // perform gradient descent with SGD or AdamW
         gradient_desc_3d(
             lr, l2,
             self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
@@ -210,14 +200,11 @@ impl LayerCuda for ElementwiseCuda
         );
         
         self.batch_size = 0.0;
-
-        ////println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.shape.0, self.shape.2, self.out_shape.2]))
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: ELEMENTWISE");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Weight ptr: {:?} | Weight grad ptr: {:?}", self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr);
@@ -260,15 +247,6 @@ impl LayerCuda for ElementwiseCuda
             self.parameter_ptrs.weight_ptr, 
             self.io_ptrs.in_shape.0 * self.io_ptrs.in_shape.1 * self.io_ptrs.in_shape.2
         );
-        //self.biases = cuda_ptr_to_array(string_to_ptr(&self.biases_ptr), &[self.shape.0, self.shape.1, self.shape.2]);
-        //free_cuda_array(string_to_ptr(&self.weight_ptr));
-        //free_cuda_array(string_to_ptr(&self.biases_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_ptr));
-        //free_cuda_array(string_to_ptr(&self.result_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
-        //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
     }
 
     fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>

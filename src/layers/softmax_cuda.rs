@@ -8,6 +8,8 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// Softmax layer, used as the output layer for probabilistic
+/// output classification
 pub struct SoftmaxCuda
 {
     pub io_ptrs: IOPtrs,
@@ -22,9 +24,10 @@ pub struct SoftmaxCuda
 
     pub batch_size: f32,
 }
+
+// implement constructor
 impl SoftmaxCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(batch: usize, rows: usize, cols: usize, temperature: f32) -> Self
     {
         return Self
@@ -43,9 +46,9 @@ impl SoftmaxCuda
     }
 }
 
+// trait implementation
 impl LayerCuda for SoftmaxCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         let batch: usize = self.io_ptrs.in_shape.0;
@@ -56,12 +59,18 @@ impl LayerCuda for SoftmaxCuda
 
         if !self.allocation_status.ptrs_allocated
         {   
+            // stores the natural exponential of all values in input array 
             self.input_exp_ptr = new_cuda_array(flattened_shape);
 
+            // stores of the sum of natural exponential values
             self.exp_sum_ptr = new_cuda_array((batch * rows * 1) as u32);
+
+            // potentially unnecessary
             self.broadcast_temp_ptr = new_cuda_array(flattened_shape);
             self.input_grad_temp = new_cuda_array(flattened_shape);
 
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -75,27 +84,33 @@ impl LayerCuda for SoftmaxCuda
             self.allocation_status.arrays_allocated = true;
         }
 
+        // CUDA function to calculate softmax on input array
         softmax_forward(
             self.io_ptrs.input_ptr, self.input_exp_ptr, self.exp_sum_ptr,
             self.io_ptrs.output_ptr, self.broadcast_temp_ptr, self.temperature,
             batch, rows, cols, self.allocation_status.zero_output
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
         return self.io_ptrs.output_traverse_ptr;
     }
     
     fn backward(&mut self, _use_dropout: bool)
     {
+        // potentially unnecessary, to be removed
         copy_cuda_to_cuda(self.input_grad_temp, self.io_ptrs.output_grad_ptr, &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]);
+        
         // for temperature
         scalar_op_3d_inplace(
             self.input_grad_temp, self.temperature, 3, 
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
         );
 
+        // only zeros input gradients when the counter in the previous layer is zero
         if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
+            // overwrite the input gradients instead of accumulation
             copy_cuda_to_cuda(
                 self.io_ptrs.input_grad_ptr, self.input_grad_temp, 
                 &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]
@@ -103,36 +118,17 @@ impl LayerCuda for SoftmaxCuda
         }
         else
         {
+            // accumulate input gradients as another layer has written to it previously
             element_op_3d_inplace(
                 self.io_ptrs.input_grad_ptr, self.input_grad_temp, 0, 
                 self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
             );
         }
+
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
         increment_counter(self.io_ptrs.backward_count_in_prev);
         self.batch_size += 1.0;
-
-        ////println!("=========================================================");
-        ////println!("original_grad: {:?}", cuda_ptr_to_array(original_grads, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("input_grad: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-
-        //let start: Instant = Instant::now();
-        //softmax_backward(
-        //    original_grads, input_exp_ptr, input_grad_ptr,
-        //    exp_sum_ptr, 
-        //    self.in_shape.0, self.in_shape.1, self.in_shape.2
-        //);
-        //let end = start.elapsed();
-        ////println!("backward: {:.6}", end.as_secs_f64());
-
-        ////println!("\noriginal_grads: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //exit(1);
-        //ptr.set_ptr(input_grad_ptr, vec![self.in_shape.0, self.in_shape.1, self.in_shape.2]);
-        ////println!("\nchained_gradients: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //exit(1);
-        ////println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        ////println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        ////println!("=========================================================");
-        //exit(1);      
     }
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
@@ -142,6 +138,7 @@ impl LayerCuda for SoftmaxCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: Softmax");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);

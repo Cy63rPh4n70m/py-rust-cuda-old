@@ -7,6 +7,8 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// Performs random dropout on input array,
+/// useful for mitigating overfitting during model training
 pub struct DropoutCuda
 {
     pub name: String,
@@ -18,9 +20,10 @@ pub struct DropoutCuda
     pub dropout_rate: f32,
     pub batch_size: f32,
 }
+
+// implement constructor
 impl DropoutCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(batch: usize, rows: usize, cols: usize, dropout_rate: f32, name: &str) -> Self
     {
         return Self
@@ -38,6 +41,7 @@ impl DropoutCuda
     }
 }
 
+// trait implementation
 impl LayerCuda for DropoutCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, use_dropout: bool) -> *mut TraversePtrs
@@ -48,11 +52,14 @@ impl LayerCuda for DropoutCuda
 
         if !self.allocation_status.ptrs_allocated
         {   
+            // initialize dropout mask pointer
             self.dropout_mask_ptr = new_cuda_array((batch * rows * cols) as u32);
 
             // initialize the random states pointer
             self.rand_state_v_ptr = init_random_states(batch, rows, cols);
             
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -68,6 +75,8 @@ impl LayerCuda for DropoutCuda
         
         if use_dropout
         {
+            // CUDA function for dropout, multiplies input with randomized binary dropout
+            // to zero inputs
             dropout_forward(
                 self.io_ptrs.input_ptr, self.io_ptrs.output_ptr, self.dropout_mask_ptr, 
                 self.rand_state_v_ptr,
@@ -75,27 +84,20 @@ impl LayerCuda for DropoutCuda
                 self.io_ptrs.in_shape.2, 
                 self.dropout_rate
             );
-
-            //println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
-            //println!("{:?}", cuda_ptr_to_array(result_ptr, &[batch, rows, cols]));
-            //exit(1);
         }
         else
         {
+            // just copy array memory if dropout disabled
             copy_cuda_to_cuda(
                 self.io_ptrs.output_ptr, self.io_ptrs.input_ptr, 
                 &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]
             );
         }
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
 
         return self.io_ptrs.output_traverse_ptr;
-
-        //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
-        //println!("-----------------------------");
-        //exit(1);
-        // previous pointer will be recorded in previous layer
 
     }
 
@@ -103,6 +105,8 @@ impl LayerCuda for DropoutCuda
     {
         if use_dropout
         {
+            // CUDA function for backpropagation through dropout, same as
+            // elementwise multiplication gradient calculation
             dropout_backward(
                 self.io_ptrs.output_grad_ptr, self.dropout_mask_ptr, 
                 self.io_ptrs.input_grad_ptr,
@@ -114,26 +118,15 @@ impl LayerCuda for DropoutCuda
         }
         else
         {
+            // just copy gradients if disabled dropout
             copy_cuda_to_cuda(
                 self.io_ptrs.input_grad_ptr, self.io_ptrs.output_grad_ptr, 
                 &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]);
         }
 
-        //println!("backward {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //exit(1);
-
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
         increment_counter(self.io_ptrs.backward_count_in_prev);
-        //let end = start.elapsed();
-        //println!("backward: {:.6}", end.as_secs_f64());
-
-        //println!("\noriginal_grads: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //println!("\nchained_gradients: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        //println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        //println!("=========================================================");
-        //exit(1);
-        // calculate summed respect to bias
-        // calculate bias gradients
     }
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
@@ -143,6 +136,7 @@ impl LayerCuda for DropoutCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: DROPOUT | Layer name: {:?}", self.name);
         println!("Shape: {:?}", self.io_ptrs.in_shape);
         println!("Dropout rate: {:?}", self.dropout_rate);

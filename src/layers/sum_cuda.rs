@@ -14,9 +14,10 @@ pub struct SumCuda
     pub axis: i32,
     pub batch_size: f32,
 }
+
+// implement constructor
 impl SumCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(
         in_batch: usize, in_rows: usize, in_cols: usize, 
         axis: i32
@@ -44,13 +45,16 @@ impl SumCuda
     }
 
 }
+
+// trait implementation
 impl LayerCuda for SumCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
-        // link with previous layer
         if !self.allocation_status.ptrs_allocated
         {
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -95,6 +99,8 @@ impl LayerCuda for SumCuda
         );
 
         self.batch_size += 1.0;
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
         increment_counter(self.io_ptrs.backward_count_in_prev);   
     }
 
@@ -105,6 +111,7 @@ impl LayerCuda for SumCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: SUM");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
