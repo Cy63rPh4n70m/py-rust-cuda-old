@@ -57,7 +57,9 @@ impl LayerCuda for CLSCuda
             self.allocation_status.arrays_allocated = true;
         }
 
-        // pointer arithmetic to select token embedding at index
+        // - pointer arithmetic to shift ny number of rows in a 2D matrix 
+        // - token index n must be multiplied by the number of column to get the 
+        //   correct pointer to the nth row of the matrix
         let chosen_embedding_ptr: *mut f32 = unsafe { self.io_ptrs.input_ptr.add(self.token_idx * self.io_ptrs.in_shape.2) };
         copy_cuda_to_cuda(self.io_ptrs.output_ptr, chosen_embedding_ptr, &[self.io_ptrs.in_shape.2]);
 
@@ -70,7 +72,9 @@ impl LayerCuda for CLSCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        // pointer arithmetic
+        // - pointer arithmetic to shift ny number of rows in a 2D matrix 
+        // - token index n must be multiplied by the number of column to get the 
+        //   correct pointer to the nth row of the matrix
         let chosen_dst_ptr: *mut f32 = unsafe { self.io_ptrs.input_grad_ptr.add(self.token_idx * self.io_ptrs.in_shape.2) };
         copy_cuda_to_cuda(chosen_dst_ptr, self.io_ptrs.output_grad_ptr, &[self.io_ptrs.in_shape.2]);
 
