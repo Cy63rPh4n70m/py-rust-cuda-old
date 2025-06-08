@@ -76,7 +76,7 @@ extern "C"
 
     fn softmax_forward_ext(
         input: *mut f32, exp_input: *mut f32, exp_sum: *mut f32,
-        result: *mut f32, broadcast_temp: *mut f32, temperature: f32,
+        result: *mut f32, temperature: f32,
         z0: u32, y0: u32, x0: u32, zero_output: bool
     );
 
@@ -344,7 +344,7 @@ pub fn l2norm_backward(
 
 pub fn softmax_forward(
     input: *mut f32, exp_input: *mut f32, exp_sum: *mut f32,
-    result: *mut f32, broadcast_temp: *mut f32, temperature: f32,
+    result: *mut f32, temperature: f32,
     z0: usize, y0: usize, x0: usize, zero_output: bool
 )
 {
@@ -352,7 +352,7 @@ pub fn softmax_forward(
     {
         softmax_forward_ext(
             input, exp_input, exp_sum,
-            result, broadcast_temp, temperature,
+            result, temperature,
             z0 as u32, y0 as u32, x0 as u32, zero_output
         );
     }
