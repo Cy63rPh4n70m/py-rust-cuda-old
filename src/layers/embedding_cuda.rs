@@ -183,12 +183,12 @@ impl LayerCuda for Embedding2DCuda
 
     fn free_detached_ptrs(&self) 
     {
-        free_cuda_array(self.parameter_ptrs.weight_ptr  as *mut c_void);
-        free_cuda_array(self.parameter_ptrs.weight_grad_ptr  as *mut c_void);
-        free_cuda_array(self.parameter_ptrs.weight_vel_ptr  as *mut c_void);
-        free_cuda_array(self.parameter_ptrs.weight_moment_ptr  as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_ptr as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_grad_ptr as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_vel_ptr as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_moment_ptr as *mut c_void);
 
-        free_cuda_array(self.embedding_lookup_grad_count_ptr  as *mut c_void);
-        free_cuda_array(self.embedding_lookup_grad_temp_ptr  as *mut c_void);
+        free_cuda_array(self.embedding_lookup_grad_count_ptr as *mut c_void);
+        free_cuda_array(self.embedding_lookup_grad_temp_ptr as *mut c_void);
     }
 }
