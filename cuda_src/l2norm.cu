@@ -204,15 +204,13 @@ __global__ void l2norm_backward_kernel(
         int result_idx = (z * y0 * x0) + (y * x0) + x;
         int norm_idx = (z * y0 * 1) + (y * 1) + 0;
 
-        //y = l2norm(x)
-        //z = x / l2norm(x)
+        //y = x / l2norm(x)
         if (zeroed)
         {
             result_grads[result_idx] = 0.0f;
         }
-        // chain rule from z to x
-        result_grads[result_idx] += 
-           (original_grads[result_idx] / (sqrtf(power_sum[norm_idx]))) * 
-           (inputs[result_idx] / (sqrtf(power_sum[norm_idx])));
+
+        // chain rule from y to x
+        result_grads[result_idx] += (original_grads[result_idx]) / (sqrtf(power_sum[norm_idx]));
     }
 }
