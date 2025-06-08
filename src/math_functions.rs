@@ -3,7 +3,9 @@ use rand::Rng;
 
 use crate::types::*;
 
-// loss functions
+// -----------------------------------------------------------------
+// loss functions and their derivatives
+
 pub fn squared_error(pred: ArrayD<f32>, target: ArrayD<f32>) -> f32
 {
     let loss_ave: f32 = (pred - target).mapv(|x: f32| x * x).sum();
@@ -40,11 +42,8 @@ pub fn log_loss_error(pred: ArrayD<f32>, target: ArrayD<f32>) -> f32
 
 pub fn log_loss_deriv(pred: ArrayD<f32>, target: ArrayD<f32>) -> ArrayD<f32>
 {
-    //let shape: &[usize] = pred.shape();
     let epsilon: f32 = 1.0e-8;
     let gradient_tensor: ArrayD<f32> = (&pred - &target) / (&pred * (1.0 - &pred) + epsilon);
-    //let gradient_tensor: ArrayD<f32> = pred - target;
-    //let gradient_mean: f32 = gradient_tensor.mean().unwrap();
 
     return gradient_tensor;
 }
@@ -105,6 +104,7 @@ pub fn get_loss_deriv_from_str(name: &str) -> Option<LossFnDeriv>
     return loss_fn_deriv;
 }
 
+// important for weight initialization in applicable layers
 pub fn random_float_vec(length: usize, lower_range: f32, upper_range: f32) -> Vec<f32>
 {
     let mut vector: Vec<f32> = Vec::new();

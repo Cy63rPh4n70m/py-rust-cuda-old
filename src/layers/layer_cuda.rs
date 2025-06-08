@@ -2,29 +2,50 @@ use std::collections::HashMap;
 
 use crate::neuralnet::TraversePtrs;
 
+// LayerCuda trait is important for all layer implementations
+// contains methods that all layers must implement, simulate inheritance
 pub trait LayerCuda
 {
+    /// forward propagation
     fn forward(
         &mut self, inputs: *mut TraversePtrs, weights: *mut TraversePtrs, use_dropout: bool
     ) -> *mut TraversePtrs;
 
+    /// backpropagation
     fn backward(&mut self, use_dropout: bool);
+
+    /// perform gradient descent
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32);
+    
+    // obtain layer details (e.g. shape, weights, etc)
     fn details(&self);
+
+    // default implementations
+
+    /// only frees the pointers that are "detached"  
+    /// (pointers that aren't shared between layers)
     fn free_detached_ptrs(&self) {}
 
-    fn get_param_count(&self) -> usize
-    {
-        return 0_usize;
-    }
+    /// required for getting the total number of parameters in the entire model
+    fn get_param_count(&self) -> usize { return 0_usize; }
+
+    /// required for saving layer parameters
     fn move_ptrs_to_arrays(&mut self) {}
-    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>> {
-        return None;
-    }
+
+    /// returns the parameters as a hash map, and None if no trainable parameters  
+    /// are available
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>> { return None; }
+
+    /// loads parameters stored in hashmap from JSON
     fn load_weights_from_hashmap(&mut self, _hashmap: &HashMap<&str, Vec<f32>>) {}
 }
 
-// composition structs to reduce code repetition
+// ----------------------------------------------------------
+// composition structs are used to reduce code repetition
+// used along with LayerCuda trait to simulate inheritance
+
+// - contains pointers involved with transferring data between layers
+// - includes input/output shape for layers
 pub struct IOPtrs
 {
     pub in_shape: (usize, usize, usize),
@@ -60,7 +81,9 @@ impl IOPtrs
     }
 }
 
-
+// includes the pointers for layer weights (if applicable), 
+// along with pointers required during training of the weights
+// using AdamW optimizer
 pub struct ParameterPtrs
 {
     pub weight_ptr: *mut f32,
@@ -96,6 +119,8 @@ impl ParameterPtrs
     }
 }
 
+// keeps track of whether pointers has been allocated in layers to prevent
+// repeated memory allocations during forward and backward passes
 pub struct AllocationStatus
 {
     pub ptrs_allocated: bool, 
@@ -115,12 +140,14 @@ impl AllocationStatus
             arrays_allocated: false,
 
             zero_output: true,
-            zero_input_grad: false,
-            zero_weight_grad: false
+            zero_input_grad: true,
+            zero_weight_grad: true
         }
     }
 }
 
+// stores weights in vector types, required for saving model state
+// to JSON and vice-versa
 pub struct WeightTensors
 {
     pub weight: Vec<f32>,

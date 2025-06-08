@@ -1,4 +1,6 @@
-// allow c functions that use CUDA kernels to be accessible to rust
+//! Contains the definitions of all CUDA functions from 
+//! the CUDA backend library, allows Rust to call CUDA functions
+
 use std::{os::raw::c_void, process::exit};
 #[link(name="test/nnpackage/backend/cuda_backend", kind="dylib")]
 extern "C"
@@ -10,10 +12,10 @@ extern "C"
     );
 
     fn matmul_bias_back_ext(
-        input_grads: *mut f32, z0: u32, y0: u32, x0: u32, // (3, 2, 5, 1)
-        weight_grads: *mut f32, z1: u32, y1: u32, x1: u32, // (3, 1, 5, 4)
-        bias_grads: *mut f32, z2: u32, y2: u32, x2: u32, // (3, 2, 5, 4) -> (3, 2, 4)
-        original_grads: *mut f32, // (3, 2, 4)
+        input_grads: *mut f32, z0: u32, y0: u32, x0: u32,
+        weight_grads: *mut f32, z1: u32, y1: u32, x1: u32,
+        bias_grads: *mut f32, z2: u32, y2: u32, x2: u32,
+        original_grads: *mut f32,
         input_tensor: *mut f32,
         weight_tensor: *mut f32,
         use_bias: bool,
@@ -45,46 +47,6 @@ extern "C"
         filter_dim: u32, strides: u32
     );
 
-    ////////////////////////////////////////////////////////////////////////////
-    /*
-    fn kqv_forward_ext(
-        input_ptr: *mut f32, z0: u32, y0: u32, x0: u32,
-        k_weight_ptr: *mut f32, k_bias_ptr: *mut f32, z1: u32, y1: u32, x1: u32,
-        q_weight_ptr: *mut f32, q_bias_ptr: *mut f32, 
-        v_weight_ptr: *mut f32, v_bias_ptr: *mut f32,
-        k_result_ptr: *mut f32, q_result_ptr: *mut f32, v_result_ptr: *mut f32
-    );
-
-    fn kqv_backward_ext(
-        input_tensor: *mut f32,
-        input_grads: *mut f32, z0: u32, y0: u32, x0: u32, // (3, 2, 5, 1)
-        k_weight_grads: *mut f32, z1: u32, y1: u32, x1: u32, // (3, 1, 5, 4)
-        k_bias_grads: *mut f32, z2: u32, y2: u32, x2: u32, // (3, 2, 5, 4) -> (3, 2, 4)
-        k_original_grads: *mut f32, // (3, 2, 4)
-        k_weight_tensor: *mut f32,
-
-        q_weight_grads: *mut f32, 
-        q_bias_grads: *mut f32,
-        q_original_grads: *mut f32, // (3, 2, 4)
-        q_weight_tensor: *mut f32,
-
-        v_weight_grads: *mut f32, 
-        v_bias_grads: *mut f32,
-        v_original_grads: *mut f32, // (3, 2, 4)
-        v_weight_tensor: *mut f32
-    );
-
-    fn kqv_update_params_ext(
-        lr: f32,
-        k_weight: *mut f32, k_weight_grads: *mut f32, z0: u32, y0: u32, x0: u32,
-        k_biases: *mut f32, k_biases_grads: *mut f32, z1: u32, y1: u32, x1: u32,
-        q_weight: *mut f32, q_weight_grads: *mut f32,
-        q_biases: *mut f32, q_biases_grads: *mut f32,
-        v_weight: *mut f32, v_weight_grads: *mut f32, z2: u32, y2: u32, x2: u32,
-        v_biases: *mut f32, v_biases_grads: *mut f32, z3: u32, y3: u32, x3: u32
-    );
-    */
-    
     fn embedding_forward_ext(
         index_vec: *mut f32, seq_len: u32,
         embedding_lookup: *mut f32, vocab_size: u32, embedding_len: u32,
@@ -112,19 +74,6 @@ extern "C"
         zeroed: bool
     );
 
-    /*
-    fn rms_norm_forward_ext(
-        original: *mut f32, original_pow2: *mut f32, z0: u32, y0: u32, x0: u32,
-        norm_ptr: *mut f32, scale_ptr: *mut f32, bias_ptr: *mut f32, normalized: *mut f32, zeroed: bool
-    );
-
-    fn rms_norm_backward_ext(
-        original_grads: *mut f32, z0: u32, y0: u32, x0: u32,
-        norm_ptr: *mut f32, original_inputs: *mut f32, result_grads: *mut f32, scale_ptr: *mut f32,
-        scale_grad_ptr: *mut f32, bias_grad_ptr: *mut f32
-    );
-    */
-
     fn softmax_forward_ext(
         input: *mut f32, exp_input: *mut f32, exp_sum: *mut f32,
         result: *mut f32, broadcast_temp: *mut f32, temperature: f32,
@@ -143,11 +92,13 @@ extern "C"
     );
 
     fn init_random_states_ext(z0: u32, y0: u32, x0: u32) -> *mut c_void;
+    
     fn elementwise_dropout_forward_ext(
         input: *mut f32, weights: *mut f32, output: *mut f32, mask: *mut f32, states: *mut c_void,
         z0: u32, y0: u32, x0: u32, dropout_rate: f32, op: u32, activation_id: i32, act_scale: f32,
         use_dropout: bool, zero_output: bool
     );
+    
     fn elementwise_dropout_backward_ext(
         original_grads: *mut f32,
         dropout_mask: *mut f32, 
@@ -157,11 +108,10 @@ extern "C"
         zero_input_grad: bool, zero_weight_grad: bool
     );
 
-    ////////////////////////////////////////////////////////////////////////////
-
     fn element_op_3d_ext(dst: *mut f32, src: *mut f32, op: i32, z0: i32, y0: i32, x0: i32);
     fn scalar_op_3d_inplace_ext(dst: *mut f32, scalar: f32, op: i32, z0: i32, y0: i32, x0: i32);
     fn zeroes_3d_ext(dst: *mut f32, z0: i32, y0: i32, x0: i32);
+    
     fn gradient_desc_3d_ext(
         lr: f32, l2: f32,
         weight_ptr: *mut f32, weight_ptr_grad: *mut f32, weight_velocity: *mut f32, weight_momentum: *mut f32, 
@@ -171,9 +121,12 @@ extern "C"
         only_beta: bool, non_neg: bool, batch_size: f32, optimizer_type: i32, 
         alpha: f32, beta: f32
     );
+
     fn transpose_2d_ext(arr_t: *mut f32, arr: *mut f32, z0: u32, y0: u32, x0: u32);
+
     fn broadcast_2d_to_3d_ext(
         broadcasted: *mut f32, z0: u32, y0: u32, x0: u32, original: *mut f32, axis: i32);
+
     fn sum_axis_ext(summed: *mut f32, original: *mut f32, z0: u32, y0: u32, x0: u32, axis: i32, zeroed: bool);
 
     fn softmax_ce_loss_ext(
@@ -204,10 +157,10 @@ pub fn matmul_add_bias_tiled(
 }
 
 pub fn matmul_add_bias_back(
-    input_grads: *mut f32, z0: u32, y0: u32, x0: u32, // (3, 2, 5, 1)
-    weight_grads: *mut f32, z1: u32, y1: u32, x1: u32, // (3, 1, 5, 4)
-    bias_grads: *mut f32, z2: u32, y2: u32, x2: u32, // (3, 2, 5, 4) -> (3, 2, 4)
-    original_grads: *mut f32, // (3, 2, 4)
+    input_grads: *mut f32, z0: u32, y0: u32, x0: u32,
+    weight_grads: *mut f32, z1: u32, y1: u32, x1: u32,
+    bias_grads: *mut f32, z2: u32, y2: u32, x2: u32,
+    original_grads: *mut f32,
     input_tensor: *mut f32,
     weight_tensor: *mut f32,
     use_bias: bool,
@@ -218,12 +171,12 @@ pub fn matmul_add_bias_back(
     unsafe
     {
         matmul_bias_back_ext(
-            input_grads, z0, y0, x0, // (3, 2, 5, 1)
-            weight_grads, z1, y1, x1, // (3, 1, 5, 4)
-            bias_grads, z2, y2, x2, // (3, 2, 5, 4) -> (3, 2, 4)
-            original_grads, // (3, 2, 4)
-            input_tensor,// (3, 2, 5, 1)
-            weight_tensor, // (3, 1, 5, 4)
+            input_grads, z0, y0, x0,
+            weight_grads, z1, y1, x1,
+            bias_grads, z2, y2, x2,
+            original_grads,
+            input_tensor,
+            weight_tensor,
             use_bias,
             zero_input_grad,
             zero_weight_grad
@@ -321,96 +274,6 @@ pub fn conv2d_backward(
     }
 }
 
-
-/////////////////////////////////////////////////////////////////////
-/*
-pub fn kqv_forward(
-    input_ptr: *mut f32, z0: usize, y0: usize, x0: usize,
-    k_weight_ptr: *mut f32, k_bias_ptr: *mut f32, z1: usize, y1: usize, x1: usize,
-    q_weight_ptr: *mut f32, q_bias_ptr: *mut f32, 
-    v_weight_ptr: *mut f32, v_bias_ptr: *mut f32,
-    k_result_ptr: *mut f32, q_result_ptr: *mut f32, v_result_ptr: *mut f32
-)
-{
-    unsafe
-    {
-        kqv_forward_ext(
-            input_ptr, z0 as u32, y0 as u32, x0 as u32,
-            k_weight_ptr, k_bias_ptr, z1 as u32, y1 as u32, x1 as u32,
-            q_weight_ptr, q_bias_ptr, 
-            v_weight_ptr, v_bias_ptr,
-            k_result_ptr, q_result_ptr, v_result_ptr
-        );
-    }
-}
-
-pub fn kqv_backward(
-    input_tensor: *mut f32,
-    input_grads: *mut f32, z0: usize, y0: usize, x0: usize, // (3, 2, 5, 1)
-    k_weight_grads: *mut f32, z1: usize, y1: usize, x1: usize, // (3, 1, 5, 4)
-    k_bias_grads: *mut f32, z2: usize, y2: usize, x2: usize, // (3, 2, 5, 4) -> (3, 2, 4)
-    k_original_grads: *mut f32, // (3, 2, 4)
-    k_weight_tensor: *mut f32,
-
-    q_weight_grads: *mut f32, 
-    q_bias_grads: *mut f32,
-    q_original_grads: *mut f32, // (3, 2, 4)
-    q_weight_tensor: *mut f32,
-
-    v_weight_grads: *mut f32, 
-    v_bias_grads: *mut f32,
-    v_original_grads: *mut f32, // (3, 2, 4)
-    v_weight_tensor: *mut f32
-)
-{
-    unsafe
-    {
-        kqv_backward_ext(
-            input_tensor,
-            input_grads, z0 as u32, y0 as u32, x0 as u32, // (3, 2, 5, 1)
-            k_weight_grads, z1 as u32, y1 as u32, x1 as u32, // (3, 1, 5, 4)
-            k_bias_grads, z2 as u32, y2 as u32, x2 as u32, // (3, 2, 5, 4) -> (3, 2, 4)
-            k_original_grads, // (3, 2, 4)
-            k_weight_tensor,
-        
-            q_weight_grads, 
-            q_bias_grads,
-            q_original_grads, // (3, 2, 4)
-            q_weight_tensor,
-        
-            v_weight_grads, 
-            v_bias_grads,
-            v_original_grads, // (3, 2, 4)
-            v_weight_tensor
-        );
-    }
-}
-
-pub fn kqv_update_params(
-    lr: f32,
-    k_weight: *mut f32, k_weight_grads: *mut f32, z0: usize, y0: usize, x0: usize,
-    k_biases: *mut f32, k_biases_grads: *mut f32, z1: usize, y1: usize, x1: usize,
-    q_weight: *mut f32, q_weight_grads: *mut f32,
-    q_biases: *mut f32, q_biases_grads: *mut f32,
-    v_weight: *mut f32, v_weight_grads: *mut f32, z2: usize, y2: usize, x2: usize,
-    v_biases: *mut f32, v_biases_grads: *mut f32, z3: usize, y3: usize, x3: usize
-)
-{
-    unsafe
-    {
-        kqv_update_params_ext(
-            lr,
-            k_weight, k_weight_grads, z0 as u32, y0 as u32, x0 as u32,
-            k_biases, k_biases_grads, z1 as u32, y1 as u32, x1 as u32,
-            q_weight, q_weight_grads,
-            q_biases, q_biases_grads,
-            v_weight, v_weight_grads, z2 as u32, y2 as u32, x2 as u32,
-            v_biases, v_biases_grads, z3 as u32, y3 as u32, x3 as u32
-        );
-    }
-}
-*/
-
 pub fn embedding_forward(
     index_vec: *mut f32, seq_len: usize,
     embedding_lookup: *mut f32, vocab_size: usize, embedding_len: usize,
@@ -478,37 +341,6 @@ pub fn l2norm_backward(
         );
     }
 }
-/*
-pub fn rms_norm_forward(
-    original: *mut f32, original_pow2: *mut f32, z0: usize, y0: usize, x0: usize,
-    norm_ptr: *mut f32, scale_ptr: *mut f32, bias_ptr: *mut f32, normalized: *mut f32, zeroed: bool
-)
-{
-    unsafe
-    {
-        rms_norm_forward_ext(
-            original, original_pow2, z0 as u32, y0 as u32, x0 as u32,
-            norm_ptr, scale_ptr, bias_ptr, normalized, zeroed
-        );
-    }
-}
-
-pub fn rms_norm_backward(
-    original_grads: *mut f32, z0: usize, y0: usize, x0: usize,
-    norm_ptr: *mut f32, original_inputs: *mut f32, result_grads: *mut f32, scale_ptr: *mut f32,
-    scale_ptr_grad: *mut f32, bias_grad_ptr: *mut f32
-)
-{
-    unsafe
-    {
-        rms_norm_backward_ext(
-            original_grads, z0 as u32, y0 as u32, x0 as u32,
-            norm_ptr, original_inputs, result_grads, scale_ptr,
-            scale_ptr_grad, bias_grad_ptr
-        );
-    }
-}
-*/
 
 pub fn softmax_forward(
     input: *mut f32, exp_input: *mut f32, exp_sum: *mut f32,
@@ -602,8 +434,6 @@ pub fn elementwise_dropout_backward(
         );
     }
 }
-
-/////////////////////////////////////////////////////////////////////
 
 pub fn element_op_3d_inplace(
     dst: *mut f32, src: *mut f32, op: i32, z0: usize, y0: usize, x0: usize

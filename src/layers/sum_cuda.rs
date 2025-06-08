@@ -5,6 +5,7 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// performs summing along axis of an array
 pub struct SumCuda
 {
     pub io_ptrs: IOPtrs,
@@ -13,9 +14,10 @@ pub struct SumCuda
     pub axis: i32,
     pub batch_size: f32,
 }
+
+// implement constructor
 impl SumCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(
         in_batch: usize, in_rows: usize, in_cols: usize, 
         axis: i32
@@ -43,12 +45,16 @@ impl SumCuda
     }
 
 }
+
+// trait implementation
 impl LayerCuda for SumCuda
-{    // supports batch matrix multiplication unlike cpu
+{
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         if !self.allocation_status.ptrs_allocated
         {
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -62,15 +68,15 @@ impl LayerCuda for SumCuda
             self.allocation_status.arrays_allocated = true;
         }
 
+        // CUDA axis sum
         sum_axis(
             self.io_ptrs.output_ptr, self.io_ptrs.input_ptr, 
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
             self.axis, self.allocation_status.zero_output
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
-        //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, new_slice_dim.as_slice()));
 
         return self.io_ptrs.output_traverse_ptr;
 
@@ -78,11 +84,14 @@ impl LayerCuda for SumCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        // only zero input gradients when previous layer's
+        // backward counter is zero
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
 
+        // opposite of summing is broadcasting
         broadcast_2d_to_3d(
             self.io_ptrs.input_grad_ptr, 
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
@@ -90,19 +99,9 @@ impl LayerCuda for SumCuda
         );
 
         self.batch_size += 1.0;
-        increment_counter(self.io_ptrs.backward_count);
-        
-        //let end = start.elapsed();
-        //println!("backward: {:.6}", end.as_secs_f64());
-
-        
-        //println!("original_grads: {:?}\n", cuda_ptr_to_array(&[self.shape.0, self.shape.1, self.shape.2]));
-        //ptr.set_ptr(input_grad_ptr, vec![self.shape.0, self.shape.1, self.shape.2]);
-        //println!("input_gradients: {:?}\n", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //println!("weight_gradients: {:?}\n", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("mask: {:?}\n", cuda_ptr_to_array(mask_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("=========================================================");
-        //exit(1);      
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
+        increment_counter(self.io_ptrs.backward_count_in_prev);   
     }
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
@@ -112,6 +111,7 @@ impl LayerCuda for SumCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: SUM");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);

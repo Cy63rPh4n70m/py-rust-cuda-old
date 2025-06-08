@@ -6,6 +6,9 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// Activation layers play an important role in introducing
+/// nonlinearity in a model, increases model expressiveness,
+/// no trainable parameters
 pub struct ActivationCuda
 {
     pub io_ptrs: IOPtrs,
@@ -15,6 +18,8 @@ pub struct ActivationCuda
     pub activation_str: String,
     pub batch_size: f32,
 }
+
+// implement constructor
 impl ActivationCuda
 {
     pub fn new(activation_str: &str, batch: usize, rows: usize, cols: usize, scale: f32) -> Self
@@ -29,12 +34,15 @@ impl ActivationCuda
     }
 }
 
+// trait implementation
 impl LayerCuda for ActivationCuda
 {
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
-    {       
+    {    
         if !self.allocation_status.ptrs_allocated
         {
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -48,29 +56,27 @@ impl LayerCuda for ActivationCuda
             self.allocation_status.arrays_allocated = true;
         }
 
+        // call CUDA activation function
         activation3d_cuda(
             self.io_ptrs.output_ptr, self.io_ptrs.input_ptr, 
             self.io_ptrs.in_shape.0 as u32, self.io_ptrs.in_shape.1 as u32, self.io_ptrs.in_shape.2 as u32, 
             &self.activation_str, self.scale, self.allocation_status.zero_output
-            //a, b
         );
-        set_zero_counter(self.io_ptrs.backward_count);
 
-        //println!("input {:?}", cuda_ptr_to_array(input_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("output {:?}\n", cuda_ptr_to_array(output_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
+        // important for zeroing gradients during backward pass
+        set_zero_counter(self.io_ptrs.backward_count);
 
         return self.io_ptrs.output_traverse_ptr;
     }
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        ////println!("current_grads: {:?}", cuda_ptr_to_array(grad_ptr.get_ptr(), grad_ptr.get_shape()));
-        ////println!("recored_inputs: {:?}", cuda_ptr_to_array(input_ptr, grad_ptr.get_shape()));
-
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        // zero input grads only if counter in previous layer is zero
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
+        // CUDA function to calculate input gradients gradients
         activation3d_cuda_backward(
             self.io_ptrs.input_grad_ptr, self.io_ptrs.input_ptr, 
             self.io_ptrs.output_grad_ptr, 
@@ -78,19 +84,12 @@ impl LayerCuda for ActivationCuda
             self.io_ptrs.in_shape.2 as u32, 
             &self.activation_str, self.scale, self.allocation_status.zero_input_grad
         );
-        increment_counter(self.io_ptrs.backward_count);
+
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
+        increment_counter(self.io_ptrs.backward_count_in_prev);
 
         self.batch_size += 1.0;
-
-        ////println!("output grad: {:?}", cuda_ptr_to_array(input_grads_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        ////println!("input grad: {:?}", cuda_ptr_to_array(input_grads_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //let end = start.elapsed();
-        ////println!("backward: {:.6}", end.as_secs_f64());
-
-        // do not free current pointer, new pointer to be used for next layer
-        //grad_ptr.set_ptr(input_grads_ptr, shape.to_vec());
-        ////println!("chained_grads: {:?}", cuda_ptr_to_array(grad_ptr.get_ptr(), grad_ptr.get_shape()));
-        //exit(1);
     }
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
@@ -100,6 +99,7 @@ impl LayerCuda for ActivationCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: ACTIVATION");
         println!("Activation function: {:?}", self.activation_str);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);

@@ -6,14 +6,16 @@ use crate::{cuda_bridge::{conv2d_backward, conv2d_forward, free_cuda_array, grad
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
 
+/// convolutional layer, mainly used for image processing
+/// perform parallel filter computation on 3D tensors
 pub struct Conv2dCuda
 {
     pub name: String,
     pub n_filters: usize,
     pub in_channels: usize,
-    pub strides: usize, // move interval
-    pub stride_count_y: usize, // how many of these moves, output dimension
-    pub stride_count_x: usize, // how many of these moves, output dimension
+    pub strides: usize,
+    pub stride_count_y: usize,
+    pub stride_count_x: usize,
     pub filter_dim: usize,
 
     pub io_ptrs: IOPtrs,
@@ -27,14 +29,17 @@ pub struct Conv2dCuda
     pub batch_size: f32,
     pub use_bias: bool,
 }
+
+// implement constructor
 impl Conv2dCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(
         n_filters: usize, filter_dim: usize, strides: usize,
         batch: usize, rows: usize, cols: usize, name: &str
     ) -> Self
     {
+        // calculate the 2D output shape given filter dimensions and stride
+        // exits if y or x dimension is zero
         let stride_count_y: usize = ((rows - filter_dim) / strides) + 1;
         let stride_count_x: usize = ((cols - filter_dim) / strides) + 1;
 
@@ -44,6 +49,7 @@ impl Conv2dCuda
             exit(1);
         }
 
+        // initialise the filter weights and biases
         let in_shape: (usize, usize, usize) = (batch, rows, cols);
         let out_shape: (usize, usize, usize) = (n_filters, stride_count_y, stride_count_x);
         
@@ -90,18 +96,17 @@ impl Conv2dCuda
     }
 
 }
+
+// trait implementation
 impl LayerCuda for Conv2dCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
-        //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input_shape));
         let batch: usize = self.io_ptrs.in_shape.0;
         let rows: usize = self.io_ptrs.in_shape.1;
         let cols: usize = self.io_ptrs.in_shape.2;
 
-        //println!("{:?}, {:?}, {:?}, {:?}", input.get_ptr(), batch, rows, cols);
-
+        // initialize pointers if not already
         if !self.allocation_status.ptrs_allocated
         {   
             self.stride_count_y = ((rows - self.filter_dim) / self.strides) + 1;
@@ -111,14 +116,16 @@ impl LayerCuda for Conv2dCuda
 
             let weight_len: u32 = (self.n_filters * self.in_channels * self.filter_dim * self.filter_dim) as u32;
             let output_len: u32 = (self.n_filters * self.stride_count_y * self.stride_count_x) as u32;
-
+            
+            // initialize bias pointers
             self.parameter_ptrs.biases_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.biases);
             self.parameter_ptrs.bias_grad_ptr = new_cuda_array(output_len);
             self.parameter_ptrs.bias_vel_ptr = new_cuda_array(output_len);
             self.parameter_ptrs.bias_moment_ptr = new_cuda_array(output_len);
 
             self.input_grads_count_ptr = new_cuda_array((batch * rows * cols) as u32);
-    
+            
+            // initialise weight/filter pointers
             self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
             self.parameter_ptrs.weight_grad_ptr = new_cuda_array(weight_len);
             self.parameter_ptrs.weight_vel_ptr = new_cuda_array(weight_len);
@@ -126,6 +133,8 @@ impl LayerCuda for Conv2dCuda
 
             self.filters_grad_count_ptr = new_cuda_array(weight_len);
 
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -139,8 +148,7 @@ impl LayerCuda for Conv2dCuda
             self.allocation_status.arrays_allocated = true;
         }
 
-        //println!("input: {:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
-        //println!("filter: {:?}", cuda_ptr_to_array(filter_ptr, &[self.n_filters, batch, self.filter_dim, self.filter_dim]));
+        // CUDA method for convolutional forward pass
         conv2d_forward(
             self.io_ptrs.input_ptr, 
             self.parameter_ptrs.weight_ptr, 
@@ -151,25 +159,15 @@ impl LayerCuda for Conv2dCuda
             self.allocation_status.zero_output
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
 
         return self.io_ptrs.output_traverse_ptr;
-        //println!("output: {:?}", cuda_ptr_to_array(result_ptr, &[self.n_filters, self.stride_count_y, self.stride_count_x]));
-        //element_op_3d_inplace(result_ptr, bias_ptr, 0, self.n_filters, self.stride_count_y, self.stride_count_x);
-
-        //println!("-----------------------------");
-        //println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
-        //println!("{:?}", cuda_ptr_to_array(weight_ptr, &[batch, cols, self.n_out]));
-        // overwrite the current pointer with result ptr, to be COPIED to input of next layer
-        // current pointer is already recorded by previous layer, don't free
-
-        //println!("{:?}", cuda_ptr_to_array(input.get_ptr(), input.get_shape()));
-        //println!("-----------------------------");
-        //exit(1);
     }
 
     fn backward(&mut self, _use_dropout: bool)
     {
+        // zero input gradients
         if counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
             zeroes_3d_inplace(
@@ -178,6 +176,7 @@ impl LayerCuda for Conv2dCuda
             );
         }
         
+        // CUDA function to calculate filter and input gradients
         conv2d_backward(
             self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr, self.input_grads_count_ptr,
             self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
@@ -188,29 +187,15 @@ impl LayerCuda for Conv2dCuda
             self.filter_dim as u32, self.strides as u32
         );
 
-        //println!("{:?}", cuda_ptr_to_array(input_grad_ptr, &[self.in_shape.0, self.in_shape.1, self.in_shape.2]));
-        //println!("{:?}", cuda_ptr_to_array(filter_grad_ptr, &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]));
-        increment_counter(self.io_ptrs.backward_count);
-        //exit(1);
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
+        increment_counter(self.io_ptrs.backward_count_in_prev);
         self.batch_size += 1.0;
-        //let end = start.elapsed();
-        //println!("backward: {:.6}", end.as_secs_f64());
-
-        //println!("\noriginal_grads: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //ptr.set_ptr(input_grad_ptr, vec![self.in_shape.0, self.in_shape.1, self.in_shape.2]);
-        //println!("\nchained_gradients: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        //println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        //println!("=========================================================");
-        //exit(1);      
-        // calculate summed respect to bias
-        // calculate bias gradients
     }
 
     fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
     {   
-        //println!("filter: {:?}", cuda_ptr_to_array(filter_ptr, &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]));
-        //println!("filter_grad: {:?}", cuda_ptr_to_array(filter_grad_ptr, &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]));
+        // perform gradient descent with SGD or AdamW
         gradient_desc_3d(
             lr, l2,
             self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr, 
@@ -222,18 +207,12 @@ impl LayerCuda for Conv2dCuda
             self.use_bias, false, self.batch_size, optimizer_type, alpha, beta
         );
 
-        //println!("filter after: {:?}", cuda_ptr_to_array(filter_ptr, &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]));
-        //println!("filter_grad after: {:?}", cuda_ptr_to_array(filter_grad_ptr, &[self.n_filters, self.in_channels, self.filter_dim, self.filter_dim]));
-
         self.batch_size = 0.0;
-
-        //println!("{:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]))
-        //self.weights -= &(self.lr * (&self.weight_gradients + self.l2 * &self.weights));
-        //self.biases -= &(self.lr * &self.bias_gradients);
     }
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: CONV_2D | Layer name: {:?}", self.name);
         println!("Input shape: {:?}", self.io_ptrs.in_shape);
         println!("Output shape: {:?}", self.io_ptrs.out_shape);
@@ -258,15 +237,6 @@ impl LayerCuda for Conv2dCuda
             self.parameter_ptrs.biases_ptr, 
             self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2
         );
-        
-        //free_cuda_array(string_to_ptr(&self.weight_ptr));
-        //free_cuda_array(string_to_ptr(&self.biases_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_ptr));
-        //free_cuda_array(string_to_ptr(&self.result_ptr));
-        //free_cuda_array(string_to_ptr(&self.input_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.output_grads_ptr));
-        //free_cuda_array(string_to_ptr(&self.weight_gradients_ptr));
-        //free_cuda_array(string_to_ptr(&self.bias_gradients_ptr));
     }
 
     fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>

@@ -6,6 +6,7 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// performs the broadcast operation
 pub struct BroadcastCuda
 {
     pub io_ptrs: IOPtrs,
@@ -14,9 +15,10 @@ pub struct BroadcastCuda
     pub axis: i32,
     pub batch_size: f32,
 }
+
+// implement constructor
 impl BroadcastCuda
 {
-    // weight matrix initialize during first ever run
     pub fn new(
         out_batch: usize, out_rows: usize, out_cols: usize, 
         axis: i32
@@ -45,13 +47,15 @@ impl BroadcastCuda
 
 }
 
+// trait implementation
 impl LayerCuda for BroadcastCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         if !self.allocation_status.ptrs_allocated
         {
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -65,57 +69,40 @@ impl LayerCuda for BroadcastCuda
             self.allocation_status.arrays_allocated = true;
         }
 
+        // call CUDA broadcast
         broadcast_2d_to_3d(
             self.io_ptrs.output_ptr, 
             self.io_ptrs.out_shape.0, self.io_ptrs.out_shape.1, self.io_ptrs.out_shape.2, 
             self.io_ptrs.input_ptr, self.axis
         );
 
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
-        //println!("input: {:?}\n", cuda_ptr_to_array(input_ptr, &[1, 1, self.shape.2]));
-        //println!("results: {:?}\n", cuda_ptr_to_array(result_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
 
         return self.io_ptrs.output_traverse_ptr;
     }
-
+    
     fn backward(&mut self, _use_dropout: bool)
     {
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        // only zero input gradients when previous layer's
+        // backward counter is zero
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
 
+        // opposite of broadcast is summing
         sum_axis(
             self.io_ptrs.input_grad_ptr, self.io_ptrs.output_grad_ptr, 
             self.io_ptrs.out_shape.0, self.io_ptrs.out_shape.1, self.io_ptrs.out_shape.2, 
             self.axis, self.allocation_status.zero_input_grad
         );
 
-        increment_counter(self.io_ptrs.backward_count);
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
+        increment_counter(self.io_ptrs.backward_count_in_prev);
         self.batch_size += 1.0;
         
-        /*
-        println!("\noriginal_grads: {:?}", cuda_ptr_to_array(original_grads, &[self.shape.0, self.shape.1, self.shape.2]));
-        //ptr.set_ptr(input_grad_ptr, vec![self.in_shape.0, self.in_shape.1, self.in_shape.2]);
-        if self.axis == 0
-        {
-            println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[1, self.shape.1, self.shape.2]));
-        }
-        else if self.axis == 1
-        {
-            println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, 1, self.shape.2]));
-        }
-        else if self.axis == 2
-        {
-            println!("\nchained_gradients: {:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, 1]));
-        }
-        */
-        //println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        //println!("=========================================================");
-        //exit(1);      
-        // calculate summed respect to bias
-        // calculate bias gradients
     }
 
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
@@ -125,6 +112,7 @@ impl LayerCuda for BroadcastCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: BROADCAST");
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
         println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);

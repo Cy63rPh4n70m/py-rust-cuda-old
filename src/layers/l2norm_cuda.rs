@@ -7,6 +7,8 @@ use crate::{
 
 use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda};
 
+/// Perform L2 or Euclidean norm for input arrays, normalizes  
+/// rows to a length of 1 and remove magnitude while maintaining directional info
 pub struct L2NormCuda
 {
     pub io_ptrs: IOPtrs,
@@ -16,6 +18,8 @@ pub struct L2NormCuda
     pub power_sum: *mut f32,
     pub batch_size: f32,
 }
+
+// implement constructor
 impl L2NormCuda
 {
     pub fn new(batch: usize, rows: usize, cols: usize) -> Self
@@ -31,9 +35,9 @@ impl L2NormCuda
     }
 }
 
+// trait implementation
 impl LayerCuda for L2NormCuda
 {
-    // supports batch matrix multiplication unlike cpu
     fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
     {
         let batch: usize = self.io_ptrs.in_shape.0;
@@ -42,14 +46,14 @@ impl LayerCuda for L2NormCuda
 
         if !self.allocation_status.ptrs_allocated
         {   
-            // initialise input pointer, set the input as the result pointer from previous layer
-            // tensor struct at this stage will contain the result ptr of the previous layer
-            ////////////////////////////////////////////////////////////////
+            // contains the squared values of all values in the input
             self.input_pow2_ptr = new_cuda_array((batch * rows * cols) as u32);
             
-            // initialise the result tensor/pointer
+            // contains the sum of the squared values in each row, the L2Norm values
             self.power_sum = new_cuda_array((batch * rows * 1) as u32);
 
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
             init_trav_in_ptrs(
                 &trav_ptr_in, &mut self.io_ptrs.backward_count,
                 &mut self.io_ptrs.backward_count_in_prev, 
@@ -63,17 +67,14 @@ impl LayerCuda for L2NormCuda
             self.allocation_status.arrays_allocated = true;
         }
 
+        // CUDA function to normalize input tensor using L2Norm
         l2norm_forward(
             self.io_ptrs.input_ptr, self.input_pow2_ptr, 
             batch, rows, cols, 
             self.power_sum, self.io_ptrs.output_ptr, true
         );
 
-        //println!("{:?}", cuda_ptr_to_array(input_ptr, &[batch, rows, cols]));
-        //println!("{:?}", cuda_ptr_to_array(power_sum, &[batch, rows, 1]));
-        //println!("{:?}", cuda_ptr_to_array(result_ptr, &[batch, rows, cols]));
-        //exit(1);
-
+        // important for zeroing gradients during backward pass
         set_zero_counter(self.io_ptrs.backward_count);
 
         return self.io_ptrs.output_traverse_ptr;
@@ -81,11 +82,13 @@ impl LayerCuda for L2NormCuda
 
     fn backward(&mut self, _use_dropout: bool)
     {
-        if counter_is_zero(self.io_ptrs.backward_count_in_prev)
+        // only zeros input gradients when the counter in the previous layer is zero
+        if !counter_is_zero(self.io_ptrs.backward_count_in_prev)
         {
-            self.allocation_status.zero_input_grad = true;
+            self.allocation_status.zero_input_grad = false;
         }
 
+        // CUDA function to perform backpropagation through L2Norm
         l2norm_backward(
             self.io_ptrs.output_grad_ptr, 
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2, 
@@ -93,22 +96,10 @@ impl LayerCuda for L2NormCuda
             self.io_ptrs.input_grad_ptr, self.allocation_status.zero_input_grad
         );
         self.batch_size += 1.0;
-        increment_counter(self.io_ptrs.backward_count);
 
-        //println!("{:?}", cuda_ptr_to_array(original_grads, &[self.shape.0, self.shape.1, self.shape.2]));
-        //println!("{:?}", cuda_ptr_to_array(input_grad_ptr, &[self.shape.0, self.shape.1, self.shape.2]));
-        
-        //exit(1);
-        //let end = start.elapsed();
-        //println!("backward: {:.6}", end.as_secs_f64());
-
-        //println!("\noriginal_grads: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //println!("\nchained_gradients: {:?}", cuda_ptr_to_array(ptr.get_ptr(), ptr.get_shape()));
-        //exit(1);
-        //println!("\nweight_gradients: {:?}", cuda_ptr_to_array(weight_grad_ptr, &[self.in_shape.0, self.in_shape.2, self.out_shape.2]));
-        //println!("\nbias_gradients: {:?}", cuda_ptr_to_array(bias_grad_ptr, &[self.out_shape.0, self.out_shape.1, self.out_shape.2]));
-        //println!("=========================================================");
-        //exit(1);      
+        // increment counter to tell other layers connected to the same previous layer
+        // to accumulate the gradient instead of zeroing it first
+        increment_counter(self.io_ptrs.backward_count_in_prev);  
     }
     
     fn update_params(&mut self, _optimizer_type: i32, _lr: f32, _l2: f32, _alpha: f32, _beta: f32)
@@ -118,6 +109,7 @@ impl LayerCuda for L2NormCuda
 
     fn details(&self)
     {
+        // print all details of layer (e.g. IO shape, weights, etc)
         println!("Layer type: L2Norm");
         println!("Input Shape: {:?}", self.io_ptrs.in_shape);
         println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
