@@ -4,7 +4,7 @@ extern "C"
 {
     __declspec(dllexport) void softmax_forward_ext(
         float* input, float* exp_input, float* exp_sum,
-        float* result, float* broadcast_temp, float temperature,
+        float* result, float temperature,
         unsigned int z0, unsigned y0, unsigned x0, bool zero_output
     );
 

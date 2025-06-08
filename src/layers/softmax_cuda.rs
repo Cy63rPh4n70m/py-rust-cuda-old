@@ -17,10 +17,8 @@ pub struct SoftmaxCuda
 
     pub input_exp_ptr: *mut f32,
     pub exp_sum_ptr: *mut f32,
-    pub broadcast_temp_ptr: *mut f32,
     
     pub temperature: f32,
-    pub input_grad_temp: *mut f32,
 
     pub batch_size: f32,
 }
@@ -37,8 +35,6 @@ impl SoftmaxCuda
 
             input_exp_ptr: std::ptr::null_mut(),
             exp_sum_ptr: std::ptr::null_mut(),
-            input_grad_temp: std::ptr::null_mut(),
-            broadcast_temp_ptr: std::ptr::null_mut(),
 
             temperature,
             batch_size: 0.0
@@ -65,10 +61,6 @@ impl LayerCuda for SoftmaxCuda
             // stores of the sum of natural exponential values
             self.exp_sum_ptr = new_cuda_array((batch * rows * 1) as u32);
 
-            // potentially unnecessary
-            self.broadcast_temp_ptr = new_cuda_array(flattened_shape);
-            self.input_grad_temp = new_cuda_array(flattened_shape);
-
             // connect the output pointers of the previous layer with the 
             // current layer's input pointers
             init_trav_in_ptrs(
@@ -87,7 +79,7 @@ impl LayerCuda for SoftmaxCuda
         // CUDA function to calculate softmax on input array
         softmax_forward(
             self.io_ptrs.input_ptr, self.input_exp_ptr, self.exp_sum_ptr,
-            self.io_ptrs.output_ptr, self.broadcast_temp_ptr, self.temperature,
+            self.io_ptrs.output_ptr, self.temperature,
             batch, rows, cols, self.allocation_status.zero_output
         );
 
@@ -96,14 +88,14 @@ impl LayerCuda for SoftmaxCuda
         return self.io_ptrs.output_traverse_ptr;
     }
     
+    /// goes on the assumption that Softmax is an output layer  
+    /// and Cross Entropy Loss is used  
+    /// (d_CE/d_logits) is just prediction - actual
     fn backward(&mut self, _use_dropout: bool)
     {
-        // potentially unnecessary, to be removed
-        copy_cuda_to_cuda(self.input_grad_temp, self.io_ptrs.output_grad_ptr, &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]);
-        
         // for temperature
         scalar_op_3d_inplace(
-            self.input_grad_temp, self.temperature, 3, 
+            self.io_ptrs.output_grad_ptr, self.temperature, 3, 
             self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
         );
 
@@ -112,7 +104,7 @@ impl LayerCuda for SoftmaxCuda
         {
             // overwrite the input gradients instead of accumulation
             copy_cuda_to_cuda(
-                self.io_ptrs.input_grad_ptr, self.input_grad_temp, 
+                self.io_ptrs.input_grad_ptr, self.io_ptrs.output_grad_ptr, 
                 &[self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2]
             );
         }
@@ -120,7 +112,7 @@ impl LayerCuda for SoftmaxCuda
         {
             // accumulate input gradients as another layer has written to it previously
             element_op_3d_inplace(
-                self.io_ptrs.input_grad_ptr, self.input_grad_temp, 0, 
+                self.io_ptrs.input_grad_ptr, self.io_ptrs.output_grad_ptr, 0, 
                 self.io_ptrs.in_shape.0, self.io_ptrs.in_shape.1, self.io_ptrs.in_shape.2
             );
         }
@@ -149,7 +141,5 @@ impl LayerCuda for SoftmaxCuda
     {
         free_cuda_array(self.input_exp_ptr as *mut c_void);
         free_cuda_array(self.exp_sum_ptr as *mut c_void);
-        free_cuda_array(self.broadcast_temp_ptr as *mut c_void);
-        free_cuda_array(self.input_grad_temp as *mut c_void);
     }
 }
