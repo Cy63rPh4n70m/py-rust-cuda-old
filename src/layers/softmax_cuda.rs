@@ -17,7 +17,6 @@ pub struct SoftmaxCuda
 
     pub input_exp_ptr: *mut f32,
     pub exp_sum_ptr: *mut f32,
-    pub broadcast_temp_ptr: *mut f32,
     
     pub temperature: f32,
     pub input_grad_temp: *mut f32,
@@ -38,7 +37,6 @@ impl SoftmaxCuda
             input_exp_ptr: std::ptr::null_mut(),
             exp_sum_ptr: std::ptr::null_mut(),
             input_grad_temp: std::ptr::null_mut(),
-            broadcast_temp_ptr: std::ptr::null_mut(),
 
             temperature,
             batch_size: 0.0
@@ -66,7 +64,6 @@ impl LayerCuda for SoftmaxCuda
             self.exp_sum_ptr = new_cuda_array((batch * rows * 1) as u32);
 
             // potentially unnecessary
-            self.broadcast_temp_ptr = new_cuda_array(flattened_shape);
             self.input_grad_temp = new_cuda_array(flattened_shape);
 
             // connect the output pointers of the previous layer with the 
@@ -87,7 +84,7 @@ impl LayerCuda for SoftmaxCuda
         // CUDA function to calculate softmax on input array
         softmax_forward(
             self.io_ptrs.input_ptr, self.input_exp_ptr, self.exp_sum_ptr,
-            self.io_ptrs.output_ptr, self.broadcast_temp_ptr, self.temperature,
+            self.io_ptrs.output_ptr, self.temperature,
             batch, rows, cols, self.allocation_status.zero_output
         );
 
@@ -149,7 +146,6 @@ impl LayerCuda for SoftmaxCuda
     {
         free_cuda_array(self.input_exp_ptr as *mut c_void);
         free_cuda_array(self.exp_sum_ptr as *mut c_void);
-        free_cuda_array(self.broadcast_temp_ptr as *mut c_void);
         free_cuda_array(self.input_grad_temp as *mut c_void);
     }
 }
