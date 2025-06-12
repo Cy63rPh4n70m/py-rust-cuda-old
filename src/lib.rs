@@ -478,3 +478,12 @@ pub unsafe extern "C" fn delete(ptr: *mut c_void)
     // free the neural net object itself
     let _ = Box::from_raw(nn);
 }
+
+// Free raw Vec<f32> pointer
+#[no_mangle]
+pub unsafe extern "C" fn free_raw_vector(ptr: *mut f32, length: usize)
+{
+    // raw pointer is consumed by vector type, automatically dropped/freed
+    // when function ends
+    let _vector: Vec<f32> = Vec::from_raw_parts(ptr, length, length);
+}
