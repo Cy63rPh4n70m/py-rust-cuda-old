@@ -64,5 +64,8 @@ class TestModel:
     def save_weights(self, path: str):
         self.model.save_weights(path)
     
+    def load_weights(self, path: str):
+        self.model.load_weights(path)
+    
     def delete_memory(self):
         self.model.delete_memory()
