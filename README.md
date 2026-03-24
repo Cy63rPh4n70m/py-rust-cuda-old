@@ -3,11 +3,13 @@ A custom machine learning framework that is implemented in Rust and CUDA C++ for
 
 List of Contents:
 1. [Dependencies](#dependencies)
-2. [Project Building](#project-building)
+2. [Project Building Steps](#project-building-steps)
 3. [Testing](#training-and-testing)
 4. [Acknowledgements](#acknowledgements)
 
 ## Dependencies
+### Compatible Operating System
+- ***This project is currently only compatible with Windows 11.***
 
 ### Python 3.11.0
 Third party Python libraries required:
