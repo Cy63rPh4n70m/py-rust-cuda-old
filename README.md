@@ -4,7 +4,7 @@ A custom machine learning framework that is implemented in Rust and CUDA C++ for
 List of Contents:
 1. [Dependencies](#dependencies)
 2. [Project Building Steps](#project-building-steps)
-3. [Testing](#training-and-testing)
+3. [Testing](#testing)
 4. [Acknowledgements](#acknowledgements)
 
 ## Dependencies
@@ -47,3 +47,12 @@ https://developer.nvidia.com/cuda-12-5-0-download-archive
         - cublas64_12.dll
         - cublasLt64_12.dll  
     - These binaries provide dependencies for the `cuda_backend.dll` and `rust_backend.dll` libraries and need to be in the same directory so such dependencies can be located.
+
+## Testing
+
+- To test machine learning models a default `test.py` Python script is included in the `./test` directory.  
+- This script trains a small feedforward neural network on randomized data to test forward/backward propagation and ensure data flows correctly. 
+- This script can be executed using the following command in the `./test` directory:
+```
+python test.py
+```
