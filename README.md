@@ -35,8 +35,12 @@ rustup override set 1.90.0
 ```
 
 ### NVIDIA CUDA C++
-- NVIDIA CUDA Version required: **12.5**
-- CUDA 12.5 is not included in this project and can be installed from the link below:  
+Machine learning models rely on custom CUDA kernels to make use of parallel processing to improve performance and inference.  
+Versions required for NVIDIA CUDA Toolkit, GPU and Driver is provided below.
+- NVIDIA GPU Compute Capability: 8.9
+- CUDA Toolkit version: v12.5
+- NVIDIA Driver version: 581.57
+- *CUDA Toolkit v12.5 is not included in this project and can be installed from the link below:*  
 https://developer.nvidia.com/cuda-12-5-0-download-archive
 
 ## Project Building Steps
