@@ -8,8 +8,7 @@ List of Contents:
 4. [Acknowledgements](#acknowledgements)
 
 ## Dependencies
-### Compatible Operating System
-- ***This project is currently only compatible with Windows 11.***
+***NOTE: This project is currently only compatible with Windows 11.***
 
 ### Python 3.11.0
 Third party Python libraries required:
