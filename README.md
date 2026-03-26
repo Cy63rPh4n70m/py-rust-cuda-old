@@ -56,3 +56,23 @@ https://developer.nvidia.com/cuda-12-5-0-download-archive
 ```
 python test.py
 ```
+
+## Acknowledgements
+
+Python libraries used:
+- [NumPy](https://numpy.org/) — Python library for numerical computing, handling of arrays and linear algebra.
+    - License type: BSD 3-Clause
+    - Link: https://github.com/numpy/numpy/blob/main/LICENSE.txt
+
+Rust crates used:
+- [Rand](https://github.com/rust-random/rand) — Required for generating random parameter values for neuron edges between the low and high bounds specified in JSON hyperparameter files.
+    - License type: MIT
+    - Link: https://github.com/rust-random/rand/blob/master/LICENSE-MIT
+
+- [Serde](https://serde.rs/) — Required for Serde JSON to save and load neural network parameters which is necessary for pausing/resuming training progress and inference.
+    - License type: MIT
+    - Link: https://github.com/serde-rs/serde/blob/master/LICENSE-MIT
+
+- [Serde JSON](https://github.com/serde-rs/json) — Depends on Serde to save and load neural network parameters to and from JSON files.
+    - License type: MIT
+    - Link: https://github.com/serde-rs/json/blob/master/LICENSE-MIT
