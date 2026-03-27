@@ -8,7 +8,7 @@ List of Contents:
 4. [Acknowledgements](#acknowledgements)
 
 ## Dependencies
-***NOTE: This project is currently only compatible with Windows 11.***
+***NOTE: This project is tested and currently only compatible with Windows 11.***
 
 ### Python 3.11.0
 Third party Python libraries required:
@@ -36,6 +36,7 @@ rustup override set 1.90.0
 
 ### NVIDIA CUDA
 Machine learning models rely on custom CUDA kernels to make use of parallel processing to improve performance and inference. Versions required for NVIDIA CUDA Toolkit, GPU and Driver is provided below.
+- Operating System: Windows 11
 - NVIDIA GPU Compute Capability: 8.9 (Tested on RTX 4050.)
 - CUDA Toolkit version: v12.5
 - NVIDIA Driver version: 581.57
