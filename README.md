@@ -1,5 +1,5 @@
 # Python/Rust/CUDA ML Framework
-A custom machine learning framework that is implemented in Rust and CUDA C++ for optimized and parallel processing. This framework uses Python as an interface to the functions in Rust for convenience and flexibility in creating custom Python classes that utilizes such functions on the Rust/CUDA C++ backend.
+A custom machine learning framework that is implemented in Rust and CUDA for optimized and parallel processing. This framework uses Python as an interface to the functions in Rust for convenience and flexibility in creating custom Python classes that utilizes such functions on the Rust/CUDA backend.
 
 List of Contents:
 1. [Dependencies](#dependencies)
@@ -34,7 +34,7 @@ rustup install 1.90.0
 rustup override set 1.90.0
 ```
 
-### NVIDIA CUDA C++
+### NVIDIA CUDA
 Machine learning models rely on custom CUDA kernels to make use of parallel processing to improve performance and inference.  
 Versions required for NVIDIA CUDA Toolkit, GPU and Driver is provided below.
 - NVIDIA GPU Compute Capability: 8.9
