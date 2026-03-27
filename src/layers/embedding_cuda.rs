@@ -1,0 +1,194 @@
+use std::{collections::HashMap, ffi::c_void};
+
+use crate::{
+    cuda_bridge::{embedding_backward, embedding_forward, free_cuda_array, gradient_desc_3d, new_cuda_array}, 
+    math_functions::random_float_vec, neuralnet::TraversePtrs, 
+    pointer_ops::{cuda_ptr_to_vec, init_trav_in_ptrs, set_zero_counter, vec_to_cuda_ptr}
+};
+
+use super::layer_cuda::{AllocationStatus, IOPtrs, LayerCuda, ParameterPtrs, WeightTensors};
+
+/// Embedding layer consists of a 2D lookup table, usually the  
+/// first layer in a model and mainly used in  
+/// language processing where each row in the table contains info  
+/// about a word or token, embedding matrix is trained  
+pub struct Embedding2DCuda
+{
+    pub io_ptrs: IOPtrs,
+    pub parameter_ptrs: ParameterPtrs,
+    pub allocation_status: AllocationStatus,
+    pub weight_tensors: WeightTensors,
+
+    pub vocab_size: usize,
+    pub embedding_len: usize,
+    pub seq_len: usize,
+
+    pub embedding_lookup_grad_count_ptr: *mut f32,
+    pub embedding_lookup_grad_temp_ptr: *mut f32,
+
+    pub batch_size: f32,
+}
+
+// implement constructor
+impl Embedding2DCuda
+{
+    pub fn new(vocab_size: usize, embedding_len: usize, seq_len: usize) -> Self
+    {
+        // initialise embedding matrix
+        let range: f32 = (6.0 / ((embedding_len + embedding_len) as f32)).sqrt();
+        let mut weight_tensors: WeightTensors = WeightTensors::new();
+        weight_tensors.weight = random_float_vec(
+            1 * vocab_size * embedding_len, 
+            -range, range
+        );
+
+        return Self
+        {
+            embedding_len,
+            vocab_size,
+            seq_len,
+
+            io_ptrs: IOPtrs::new((1, 1, seq_len), (1, seq_len, embedding_len)),
+            parameter_ptrs: ParameterPtrs::new(),
+            weight_tensors,
+            allocation_status: AllocationStatus::new(),
+            
+            embedding_lookup_grad_count_ptr: std::ptr::null_mut(),
+            embedding_lookup_grad_temp_ptr: std::ptr::null_mut(),
+            batch_size: 0.0,
+        }
+    }
+}
+
+// trait implementation
+impl LayerCuda for Embedding2DCuda
+{
+    fn forward(&mut self, trav_ptr_in: *mut TraversePtrs, _trav_ptr_weight: *mut TraversePtrs, _use_dropout: bool) -> *mut TraversePtrs
+    {
+        if !self.allocation_status.ptrs_allocated
+        {   
+            // initialize embedding pointers
+            let embedding_lookup_len: u32 = (1 * self.vocab_size * self.embedding_len) as u32;
+
+            self.parameter_ptrs.weight_ptr = vec_to_cuda_ptr(&mut self.weight_tensors.weight);
+            self.parameter_ptrs.weight_grad_ptr = new_cuda_array(embedding_lookup_len);
+            self.parameter_ptrs.weight_vel_ptr = new_cuda_array(embedding_lookup_len);
+            self.parameter_ptrs.weight_moment_ptr = new_cuda_array(embedding_lookup_len);
+            self.embedding_lookup_grad_count_ptr = new_cuda_array(embedding_lookup_len);
+            self.embedding_lookup_grad_temp_ptr = new_cuda_array(embedding_lookup_len);
+
+            // connect the output pointers of the previous layer with the 
+            // current layer's input pointers
+            init_trav_in_ptrs(
+                &trav_ptr_in, &mut self.io_ptrs.backward_count,
+                &mut self.io_ptrs.backward_count_in_prev, 
+                &mut self.io_ptrs.input_ptr, &mut self.io_ptrs.input_grad_ptr, 
+                &mut self.io_ptrs.output_ptr, &mut self.io_ptrs.output_grad_ptr, 
+                &mut self.io_ptrs.output_traverse_ptr, 
+                (self.io_ptrs.out_shape.0 * self.io_ptrs.out_shape.1 * self.io_ptrs.out_shape.2) as usize
+            );
+
+            self.allocation_status.ptrs_allocated = true;
+            self.allocation_status.arrays_allocated = true;
+        }
+
+        // CUDA function to obtain the required token embeddings
+        embedding_forward(
+            self.io_ptrs.input_ptr, self.seq_len, 
+            self.parameter_ptrs.weight_ptr, self.vocab_size, self.embedding_len, 
+            self.io_ptrs.output_ptr
+        );
+
+        // important for zeroing gradients during backward pass
+        set_zero_counter(self.io_ptrs.backward_count);
+        
+        return self.io_ptrs.output_traverse_ptr;
+    }
+
+    fn backward(&mut self, _use_dropout: bool)
+    {
+        // CUDA function to calculate embedding matrix gradients
+        embedding_backward(
+            self.io_ptrs.input_ptr, self.seq_len, 
+            self.parameter_ptrs.weight_ptr, self.vocab_size, self.embedding_len, 
+            self.parameter_ptrs.weight_grad_ptr,
+            self.embedding_lookup_grad_temp_ptr,
+            self.embedding_lookup_grad_count_ptr,
+            self.io_ptrs.output_grad_ptr, 
+            self.io_ptrs.input_grad_ptr
+        );
+
+        self.batch_size += 1.0;
+    }
+
+    fn update_params(&mut self, optimizer_type: i32, lr: f32, l2: f32, alpha: f32, beta: f32)
+    {   
+        // perform gradient descent with SGD or AdamW
+        gradient_desc_3d(
+            lr, l2,
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr,
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            1, self.vocab_size, self.embedding_len,
+
+            self.parameter_ptrs.weight_ptr, self.parameter_ptrs.weight_grad_ptr,
+            self.parameter_ptrs.weight_vel_ptr, self.parameter_ptrs.weight_moment_ptr,
+            1, self.vocab_size, self.embedding_len,
+
+            true, false, self.batch_size, optimizer_type, alpha, beta
+        );
+
+        self.batch_size = 0.0;
+    }
+
+    fn details(&self)
+    {
+        // print all details of layer (e.g. IO shape, weights, etc)
+        println!("Layer type: Embedding2D");
+        println!("Vocab shape: {:?}", (1, self.vocab_size, self.embedding_len));
+        println!("Input ptr: {:?} | Input grad ptr: {:?}", self.io_ptrs.input_ptr, self.io_ptrs.input_grad_ptr);
+        println!("Output ptr: {:?} | Output grad ptr: {:?}", self.io_ptrs.output_ptr, self.io_ptrs.output_grad_ptr);
+        println!("Embedding matrix:");
+        println!("{:?}", self.weight_tensors.weight);
+    }
+
+    fn get_param_count(&self) -> usize
+    {
+        return self.vocab_size * self.embedding_len;
+    }
+
+    fn move_ptrs_to_arrays(&mut self)
+    {
+        self.weight_tensors.weight = cuda_ptr_to_vec(
+            self.parameter_ptrs.weight_ptr, 
+            1 * self.vocab_size * self.embedding_len
+        );
+    }
+
+    fn get_weights_hashmap(&mut self) -> Option<HashMap<&str, Vec<f32>>>
+    {
+        self.move_ptrs_to_arrays();
+        let mut hashmap: HashMap<&str, Vec<f32>> = HashMap::new();
+        hashmap.insert("weights", self.weight_tensors.weight.clone());
+
+        return Some(hashmap);
+    }
+
+    fn load_weights_from_hashmap(
+        &mut self, json_hashmap: &HashMap<&str, Vec<f32>>
+    ) 
+    {
+        self.weight_tensors.weight = json_hashmap.get("weights").unwrap().to_vec();
+        self.allocation_status.arrays_allocated = true;
+    }
+
+    fn free_detached_ptrs(&self) 
+    {
+        free_cuda_array(self.parameter_ptrs.weight_ptr as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_grad_ptr as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_vel_ptr as *mut c_void);
+        free_cuda_array(self.parameter_ptrs.weight_moment_ptr as *mut c_void);
+
+        free_cuda_array(self.embedding_lookup_grad_count_ptr as *mut c_void);
+        free_cuda_array(self.embedding_lookup_grad_temp_ptr as *mut c_void);
+    }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "py_rust_cuda_ml_framework"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rust_backend"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.8.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ndarray = {version = "0.15.6", features = ["serde", "rayon", "matrixmultiply-threading"]}
